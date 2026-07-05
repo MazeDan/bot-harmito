@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(node --version)",
-      "PowerShell(ffmpeg -version 2>$null)"
-    ]
-  }
-}
