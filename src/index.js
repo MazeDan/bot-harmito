@@ -6,6 +6,7 @@ import makeWASocket, {
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { handleMessage, loadCommands } from './handler.js'
+import { initFinance } from './lib/finance.js'
 
 const logger = pino({ level: 'silent' })
 
@@ -50,5 +51,6 @@ async function start() {
   })
 }
 
+initFinance()
 await loadCommands()
 await start()

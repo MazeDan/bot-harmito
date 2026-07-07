@@ -32,6 +32,21 @@ Na primeira vez, vai aparecer um **QR code no terminal** — escaneie com o What
 
 Prefixos aceitos: `/`, `!` e `.`
 
+## Financeiro (contas e extratos)
+
+Além das figurinhas, o bot controla **quem te deve** e **gastos por conta bancária**.
+
+| Comando | O que faz |
+|---|---|
+| `/item 22 danilo [obs]` | Lança R$22 na conta do Danilo (ele passa a te dever esse valor) |
+| `/pagou 50 danilo` | Registra um pagamento que o Danilo te fez (abate a dívida) |
+| `/conta danilo` | Mostra o extrato de uma pessoa (lançamentos, pagamentos e saldo) |
+| `/contas` | Resumo geral: quanto cada um te deve + gastos por conta bancária |
+
+**Extrato bancário (PDF):** mande o **PDF do extrato** para o bot com o **nome da conta na legenda** (ex.: `Nubank`). Ele lê as **saídas (gastos) do mês** e guarda separado por conta. Veja o resumo com `/contas`.
+
+> A leitura do PDF é genérica e pode precisar de ajuste ao layout do seu banco. Se algum valor sair errado, mande um exemplo do extrato para calibrar. Os dados financeiros ficam em `data/finance.json` (fora do git).
+
 ## Como adicionar um comando novo (jogo, etc.)
 
 Crie um arquivo em `src/commands/`, por exemplo `src/commands/moeda.js`:
