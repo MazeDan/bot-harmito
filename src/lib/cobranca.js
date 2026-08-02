@@ -1,7 +1,7 @@
 import { config } from '../config.js'
 import {
-  competenciaAtual, faturaOf, getPerson, getSettings, listCards,
-  markReminder, money, reminderSent,
+  balanceOf, competenciaAtual, faturaOf, getCard, getPerson, getSettings, listCards,
+  markReminder, money, reminderSent, souEu,
 } from './finance.js'
 import { sendText, isOnline } from './wa.js'
 
@@ -38,6 +38,72 @@ export function montarMensagem(fatura, pessoa) {
 }
 
 /**
+ * Mensagem consolidada de uma pessoa: tudo que ela deve, em todos os cartões,
+ * agrupado por fatura. É o texto do botão "copiar" do painel.
+ */
+export function montarMensagemPessoa(personKey) {
+  const b = balanceOf(personKey)
+  if (!b) return null
+  const s = getSettings()
+
+  // agrupa os lançamentos por cartão + competência
+  const grupos = new Map()
+  for (const i of b.items) {
+    const chave = `${i.card || ''}|${i.competencia}`
+    if (!grupos.has(chave)) grupos.set(chave, { card: i.card, competencia: i.competencia, itens: [] })
+    grupos.get(chave).itens.push(i)
+  }
+
+  let txt = `Oi, ${b.name}! 👋\n\nSegue o resumo do que ficou nos meus cartões:\n`
+  for (const g of [...grupos.values()].sort((a, b2) => a.competencia.localeCompare(b2.competencia))) {
+    const nome = g.card ? getCard(g.card)?.name ?? g.card : 'Sem cartão'
+    const total = g.itens.reduce((sum, i) => sum + i.value, 0)
+    txt += `\n*${nome}* — fatura de ${mesBR(g.competencia)}\n`
+    txt += g.itens
+      .sort((x, y) => x.at.localeCompare(y.at))
+      .map((i) => `▸ ${dataBR(i.at)} — ${money(i.value)}${i.note ? ` (${i.note})` : ''}${i.parcela ? ` [${i.parcela.n}/${i.parcela.total}]` : ''}`)
+      .join('\n')
+    txt += `\n_subtotal: ${money(total)}_\n`
+  }
+
+  txt += `\n━━━━━━━━━━\nTotal lançado: ${money(b.totalItems)}\n`
+  if (b.totalPaid > 0) txt += `Já recebi: ${money(b.totalPaid)}\n`
+  txt += `💰 *Total a pagar: ${money(b.saldo)}*`
+  if (s.pix) txt += `\n\n🔑 *PIX:* ${s.pix}${s.pixNome ? `\n_(${s.pixNome})_` : ''}`
+  return txt
+}
+
+/**
+ * Resumo de uma fatura inteira, com todo mundo e o total — para mandar num
+ * grupo ou guardar para você.
+ */
+export function montarResumoFatura(cardName, comp = null) {
+  const f = faturaOf(cardName, comp)
+  if (!f) return null
+  const s = getSettings()
+  const venc = f.vencimento ? new Date(f.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : null
+
+  let txt = `💳 *${f.card}* — fatura de ${mesBR(f.competencia)}\n`
+  if (venc) txt += `📅 Vence em ${venc}\n`
+  txt += '\n'
+
+  for (const p of f.pessoas) {
+    const eu = souEu(p.person)
+    txt += `*${p.name}${eu ? ' (eu)' : ''}* — ${money(p.aberto)}${p.pago ? ` _(pagou ${money(p.pago)})_` : ''}\n`
+    txt += p.items
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .map((i) => `  ▸ ${dataBR(i.at)} ${money(i.value)}${i.note ? ` — ${i.note}` : ''}${i.parcela ? ` [${i.parcela.n}/${i.parcela.total}]` : ''}`)
+      .join('\n')
+    txt += '\n\n'
+  }
+
+  txt += `━━━━━━━━━━\n💸 *Total da fatura: ${money(f.total)}*`
+  if (f.pago > 0) txt += `\n💵 Já recebi: ${money(f.pago)}\n🟠 Em aberto: *${money(f.aberto)}*`
+  if (s.pix) txt += `\n\n🔑 *PIX:* ${s.pix}${s.pixNome ? `\n_(${s.pixNome})_` : ''}`
+  return txt
+}
+
+/**
  * Envia (ou simula) a cobrança de um cartão.
  * Retorna a lista do que foi enviado/simulado/pulado.
  */
@@ -50,6 +116,7 @@ export async function cobrar(cardName, { competencia = null, dryRun = config.cob
 
   for (const pessoa of fatura.pessoas) {
     if (apenas && pessoa.person !== apenas) continue
+    if (souEu(pessoa.person)) { resultados.push({ ...base(pessoa), status: 'sou-eu' }); continue }
     if (pessoa.aberto <= 0.009) { resultados.push({ ...base(pessoa), status: 'quitado' }); continue }
 
     const p = getPerson(pessoa.person)
@@ -101,7 +168,7 @@ export async function rodarLembretes({ dryRun = config.cobranca.dryRun } = {}) {
     if (!tipo) continue
 
     for (const pessoa of fatura.pessoas) {
-      if (pessoa.aberto <= 0.009) continue
+      if (pessoa.aberto <= 0.009 || souEu(pessoa.person)) continue
       if (reminderSent(card.key, pessoa.person, comp, tipo)) continue
       const r = await cobrar(card.key, { competencia: comp, dryRun, tipo, apenas: pessoa.person })
       saida.push(...(r.resultados || []).map((x) => ({ ...x, card: card.name, competencia: comp, tipo })))

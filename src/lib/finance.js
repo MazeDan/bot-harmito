@@ -16,7 +16,9 @@ const empty = () => ({
   payments: [],
   accounts: {},
   reminders: [],
-  settings: { pix: '', pixNome: '' },
+  // `eu` = chave da pessoa que é o dono do cartão (você). Os gastos dela não
+  // entram em "a receber" e ela nunca é cobrada.
+  settings: { pix: '', pixNome: '', eu: '' },
 })
 
 let db = empty()
@@ -375,8 +377,52 @@ export async function markReminder(card, person, competencia, tipo) {
 export const getSettings = () => ({ ...db.settings })
 export async function setSettings(patch) {
   db.settings = { ...db.settings, ...patch }
+  if (patch.eu !== undefined) db.settings.eu = patch.eu ? key(patch.eu) : ''
   await save()
   return db.settings
+}
+
+/** Chave da pessoa marcada como "você" (dono dos cartões) */
+export const euKey = () => db.settings.eu || ''
+export const souEu = (person) => Boolean(db.settings.eu) && key(person) === db.settings.eu
+
+/**
+ * Quanto da(s) fatura(s) é seu: total do mês e a quebra por cartão.
+ * `comp` vazio usa a competência atual de cada cartão.
+ */
+export function minhaParte(comp = null) {
+  const eu = euKey()
+  if (!eu) return null
+  const porCartao = listCards().map((c) => {
+    const competencia = comp || competenciaAtual(c.key)
+    const itens = db.expenses.filter((e) => e.card === c.key && e.person === eu && e.competencia === competencia)
+    const pago = db.payments
+      .filter((p) => p.card === c.key && p.person === eu && p.competencia === competencia)
+      .reduce((s, p) => s + p.value, 0)
+    return {
+      card: c.name, cardKey: c.key, competencia,
+      total: r2(itens.reduce((s, e) => s + e.value, 0)),
+      pago: r2(pago),
+      vencimento: vencimentoDate(c.key, competencia)?.toISOString().slice(0, 10) ?? null,
+      itens: itens.sort((a, b) => a.at.localeCompare(b.at)),
+    }
+  }).filter((x) => x.total > 0 || x.pago > 0)
+
+  // gastos meus sem cartão nenhum
+  const compAtual = comp || ym(new Date())
+  const soltos = db.expenses.filter((e) => !e.card && e.person === eu && e.competencia === compAtual)
+
+  const totalSoltos = soltos.reduce((s, e) => s + e.value, 0)
+  const total = porCartao.reduce((s, x) => s + x.total, 0) + totalSoltos
+  const pago = porCartao.reduce((s, x) => s + x.pago, 0)
+
+  return {
+    total: r2(total),
+    pago: r2(pago),
+    aPagar: r2(total - pago),   // é isso que ainda sai do seu bolso
+    porCartao: porCartao.map((c) => ({ ...c, falta: r2(c.total - c.pago) })),
+    semCartao: { total: r2(totalSoltos), itens: soltos },
+  }
 }
 
 // ---------- contas bancárias (extratos PDF) ----------

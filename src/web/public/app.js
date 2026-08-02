@@ -53,6 +53,42 @@ async function api(rota, opts = {}) {
   return data
 }
 
+/** Copia para a área de transferência, com plano B para navegador antigo. */
+async function copiar(texto, rotulo = 'Texto copiado!') {
+  try {
+    await navigator.clipboard.writeText(texto)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = texto
+    ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.append(ta)
+    ta.select()
+    const ok = document.execCommand?.('copy')
+    ta.remove()
+    if (!ok) return toast('Seu navegador bloqueou a cópia. Segure no texto para copiar à mão.', 'err')
+  }
+  toast('📋 ' + rotulo)
+}
+
+/** Botão de copiar que vira ✅ por um instante */
+function ligarCopia(base = document) {
+  $$('[data-copiar]', base).forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.stopPropagation()
+      vibrar()
+      const rota = b.dataset.copiar
+      const original = b.innerHTML
+      b.disabled = true
+      try {
+        const { texto } = rota.startsWith('#') ? { texto: $(rota, base).textContent } : await api(rota)
+        await copiar(texto, b.dataset.rotulo || 'Copiado!')
+        b.innerHTML = '✅ Copiado'
+        setTimeout(() => { b.innerHTML = original; b.disabled = false }, 1600)
+      } catch (e) { b.disabled = false; toast(e.message, 'err') }
+    }
+  })
+}
+
 function toast(msg, tipo = 'ok') {
   $$('.toast').forEach((t) => t.remove())
   const t = el(`<div class="toast ${tipo}">${esc(msg)}</div>`)
@@ -192,7 +228,7 @@ function donut(fatias) {
 const TITULOS = {
   resumo: ['Resumo', () => `Fatura de ${mesLongo(S.resumo.competencia)}`],
   cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
-  pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => p.saldo > 0.009).length} devendo`],
+  pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => !p.eu && p.saldo > 0.009).length} devendo`],
   historico: ['Histórico', () => `${S.expenses.length} lançamentos`],
   mais: ['Mais', () => 'extratos, lote e configurações'],
 }
@@ -205,6 +241,7 @@ function render() {
   $$('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === TAB))
   $('#main').innerHTML = ({ resumo, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
+  ligarCopia()
   window.scrollTo(0, 0)
 }
 
@@ -222,10 +259,11 @@ function resumo() {
   const prox = r.proximoVencimento
   const dias = prox?.fatura?.diasParaVencer
   const classe = dias == null ? '' : dias < 0 ? 'danger' : dias <= 3 ? 'warn' : 'ok'
-  const devedores = S.pessoas.filter((p) => Math.abs(p.saldo) > 0.009)
+  const devedores = S.pessoas.filter((p) => !p.eu && Math.abs(p.saldo) > 0.009)
 
   return `
     ${!S.cards.length ? '<div class="banner info">👋 Comece cadastrando um cartão na aba <b>Cartões</b> — com o dia de fechamento eu jogo cada compra na fatura certa sozinho.</div>' : ''}
+    ${!S.eu && S.pessoas.length ? '<div class="banner info" id="avisoEu">👤 Marque <b>quem é você</b> na aba Pessoas para eu separar quanto da fatura é seu e nunca te cobrar.</div>' : ''}
     ${S.cobranca.dryRun && S.cobranca.ativo ? '<div class="banner warn">🧪 Cobrança em <b>modo simulação</b> — nada é enviado de verdade.</div>' : ''}
 
     <div class="grid g2">
@@ -235,12 +273,16 @@ function resumo() {
       <div class="kpi ${classe}"><div class="lbl">Vence em</div><div class="val">${prox ? (dias > 0 ? dias + 'd' : dias === 0 ? 'hoje' : 'venceu') : '—'}</div><div class="sub">${prox ? esc(prox.name) : 'sem vencimento'}</div></div>
     </div>
 
+    ${cardMinhaParte()}
+
     ${devedores.length ? `<div class="card">
-      <h3>Quem te deve <span class="push"></span></h3>
+      <h3>Quem te deve
+        <button class="btn ghost sm push" data-acao="copiar-todos">📋 Copiar tudo</button>
+      </h3>
       <div class="rows">${devedores.map((p) => linha({
         av: iniciais(p.name), t1: esc(p.name),
         t2: p.phone ? '📱 ' + esc(p.phone) : '<span style="color:var(--warn)">sem telefone</span>',
-        v: money(p.saldo), sub: 'toque p/ receber',
+        v: money(p.saldo), sub: 'toque p/ ver',
         cor: p.saldo > 0 ? 'var(--warn)' : 'var(--ok)',
         acao: 'ver-pessoa', dados: `data-p="${esc(p.key)}"`,
       })).join('')}</div>
@@ -255,6 +297,58 @@ function resumo() {
     ${S.futuro.length ? `<div class="card"><h3>Parcelas a vencer <small>meses à frente</small></h3>
       ${barChart(S.futuro.map((f) => ({ rotulo: mesBR(f.competencia), valor: f.total })), { altura: 130 })}</div>` : ''}
   `
+}
+
+/** "Quanto EU tenho que pagar" — a sua fatia de cada fatura */
+function cardMinhaParte() {
+  if (!S.eu) return ''
+  const mp = S.minhaParte
+  const nomeEu = S.pessoas.find((p) => p.eu)?.name || 'Você'
+  if (!mp || (!mp.total && !mp.semCartao.total)) {
+    return `<div class="card"><h3>🫵 Minha parte <small>${esc(nomeEu)}</small></h3>
+      <div class="empty">Você não tem nenhum gasto nas faturas deste mês. 🎉</div></div>`
+  }
+
+  const blocos = mp.porCartao.map((c) => {
+    const venc = c.vencimento ? new Date(c.vencimento + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null
+    const quitado = c.falta <= 0.009
+    return `<button class="row-item" data-acao="ver-minha-parte" data-card="${esc(c.cardKey)}">
+      <span class="avatar">💳</span>
+      <span class="grow">
+        <span class="t1">${esc(c.card)}</span>
+        <span class="t2">${c.itens.length} lançamento(s) · fatura ${mesBR(c.competencia)}${venc ? ` · vence ${venc}` : ''}</span>
+      </span>
+      <span class="v" ${quitado ? 'style="color:var(--ok)"' : ''}>
+        ${quitado ? 'pago ✓' : money(c.falta)}
+        <small>${quitado ? `de ${money(c.total)}` : c.pago ? `pagou ${money(c.pago)} de ${money(c.total)}` : `${money(c.total)} lançados`}</small>
+      </span>
+      <span class="chev">›</span>
+    </button>`
+  }).join('')
+
+  const soltos = mp.semCartao.total > 0
+    ? `<div class="row-item" style="cursor:default"><span class="avatar">💸</span>
+       <span class="grow"><span class="t1">Sem cartão</span><span class="t2">${mp.semCartao.itens.length} lançamento(s)</span></span>
+       <span class="v">${money(mp.semCartao.total)}</span></div>`
+    : ''
+
+  return `<div class="card" style="border-color:rgba(124,92,255,.4)">
+    <h3>🫵 Minha parte
+      <button class="btn ghost sm push" data-acao="copiar-minha-parte">📋 Copiar</button>
+    </h3>
+    <div style="text-align:center;padding:2px 0 12px">
+      <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">
+        ${mp.aPagar > 0.009 ? 'Eu ainda tenho que pagar' : 'Minha parte está quitada'}
+      </div>
+      <div style="font-size:32px;font-weight:700;letter-spacing:-1.2px;margin-top:3px${mp.aPagar <= 0.009 ? ';color:var(--ok)' : ''}">
+        ${money(Math.max(mp.aPagar, 0))}
+      </div>
+      <div class="muted" style="font-size:12.5px;margin-top:3px">
+        ${esc(nomeEu)} · ${money(mp.total)} lançados nas faturas deste mês${mp.pago ? ` · ${money(mp.pago)} já pagos` : ''}
+      </div>
+    </div>
+    <div class="rows">${blocos}${soltos}</div>
+  </div>`
 }
 
 // --- Cartões ---
@@ -295,16 +389,21 @@ function cartoes() {
 
       <div class="rows" style="margin-top:10px">
         ${f.pessoas.length ? f.pessoas.map((p) => linha({
-          av: iniciais(p.name), t1: esc(p.name),
+          av: p.person === S.eu ? '🫵' : iniciais(p.name),
+          t1: esc(p.name) + (p.person === S.eu ? ' <span class="tag accent">você</span>' : ''),
           t2: p.pago ? `pagou ${money(p.pago)}` : `${p.items.length} lançamento(s)`,
-          v: money(p.aberto), acao: 'ver-pessoa', dados: `data-p="${esc(p.person)}"`,
+          v: money(p.aberto), cor: p.person === S.eu ? 'var(--accent-2)' : '',
+          acao: 'ver-pessoa', dados: `data-p="${esc(p.person)}"`,
         })).join('') : '<div class="muted" style="font-size:13.5px;padding:8px 0">Nenhum lançamento nesta fatura.</div>'}
       </div>
 
       <div class="btn-row" style="margin-top:14px">
         <button class="btn" data-acao="cobrar" data-card="${esc(c.key)}">📤 Cobrar</button>
+        <button class="btn ghost" data-copiar="/texto/fatura?card=${encodeURIComponent(c.key)}&comp=${encodeURIComponent(f.competencia)}" data-rotulo="Resumo da fatura copiado!">📋 Copiar</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
         <button class="btn ghost" data-acao="ver-fatura" data-card="${esc(c.key)}">🧾 Faturas</button>
-        <button class="btn ghost" data-acao="editar-cartao" data-card="${esc(c.key)}" style="flex:0 0 52px">✏️</button>
+        <button class="btn ghost" data-acao="editar-cartao" data-card="${esc(c.key)}">✏️ Editar</button>
       </div>
     </div>`
   }).join('') + `<button class="btn ghost full" style="margin-top:14px" data-acao="novo-cartao">+ Novo cartão</button>`
@@ -316,18 +415,32 @@ function pessoas() {
     return `<div class="card"><div class="empty"><span class="big">👥</span>Ninguém cadastrado ainda.<br>As pessoas aparecem sozinhas quando você lança um gasto.</div>
       <button class="btn full" data-acao="nova-pessoa">+ Adicionar pessoa</button></div>`
   }
-  const semFone = S.pessoas.filter((p) => !p.phone).length
+  const semFone = S.pessoas.filter((p) => !p.eu && !p.phone).length
+  const eu = S.pessoas.find((p) => p.eu)
+  const outros = S.pessoas.filter((p) => !p.eu)
+
+  const item = (p) => linha({
+    av: p.eu ? '🫵' : iniciais(p.name),
+    t1: esc(p.name) + (p.eu ? ' <span class="tag accent">você</span>' : ''),
+    t2: p.eu ? 'não entra em "a receber" nem é cobrado'
+      : p.phone ? '📱 ' + esc(p.phone) : '<span style="color:var(--warn)">sem telefone</span>',
+    v: money(p.saldo),
+    sub: p.eu ? 'saldo de tudo' : p.totalPaid ? `pagou ${money(p.totalPaid)}` : '',
+    cor: p.eu ? 'var(--accent-2)' : p.saldo > 0.009 ? 'var(--warn)' : 'var(--txt-3)',
+    acao: 'ver-pessoa', dados: `data-p="${esc(p.key)}"`,
+  })
+
   return `
-    ${semFone ? `<div class="banner warn">📱 ${semFone} pessoa(s) sem telefone — não dá para cobrar automaticamente. Toque para adicionar.</div>` : ''}
-    <div class="card"><div class="rows">
-      ${S.pessoas.map((p) => linha({
-        av: iniciais(p.name), t1: esc(p.name),
-        t2: p.phone ? '📱 ' + esc(p.phone) : '<span style="color:var(--warn)">sem telefone</span>',
-        v: money(p.saldo), sub: p.totalPaid ? `pagou ${money(p.totalPaid)}` : '',
-        cor: p.saldo > 0.009 ? 'var(--warn)' : 'var(--txt-3)',
-        acao: 'ver-pessoa', dados: `data-p="${esc(p.key)}"`,
-      })).join('')}
-    </div></div>
+    ${!S.eu ? '<div class="banner info">👤 Toque numa pessoa e marque <b>"sou eu"</b> — assim eu separo quanto da fatura é seu e nunca te incluo na cobrança.</div>' : ''}
+    ${semFone ? `<div class="banner warn">📱 ${semFone} pessoa(s) sem telefone — não dá para cobrar automaticamente.</div>` : ''}
+
+    ${eu ? `<div class="card" style="border-color:rgba(124,92,255,.4)">
+      <h3>Você</h3><div class="rows">${item(eu)}</div></div>` : ''}
+
+    <div class="card">
+      ${eu ? '<h3>Outras pessoas</h3>' : ''}
+      <div class="rows">${outros.map(item).join('')}</div>
+    </div>
     <button class="btn ghost full" style="margin-top:14px" data-acao="nova-pessoa">+ Nova pessoa</button>`
 }
 
@@ -380,6 +493,14 @@ function mais() {
       ${linha({ av: '👤', t1: 'Nova pessoa', t2: 'nome e telefone', acao: 'nova-pessoa' })}
     </div></div>
 
+    <div class="card"><h3>Quem sou eu <small>separa a sua parte da fatura</small></h3>
+      <div class="chips" id="chipsEu">
+        <button class="chip ${!S.eu ? 'on' : ''}" data-v="">ninguém</button>
+        ${S.pessoas.map((p) => `<button class="chip ${p.eu ? 'on' : ''}" data-v="${esc(p.key)}">${p.eu ? '🫵 ' : ''}${esc(p.name)}</button>`).join('')}
+      </div>
+      <div class="muted" style="font-size:12.5px;margin-top:10px">Os gastos dessa pessoa não entram em "a receber" e ela nunca é cobrada — mas continuam contando no total da fatura.</div>
+    </div>
+
     <div class="card"><h3>Chave PIX <small>vai em toda cobrança</small></h3>
       <div class="field"><label>Chave</label><input id="cfgPix" value="${esc(s.pix)}" placeholder="email, telefone ou aleatória"></div>
       <div class="field"><label>Nome do titular</label><input id="cfgPixNome" value="${esc(s.pixNome)}" placeholder="Daniel S."></div>
@@ -429,6 +550,16 @@ function mais() {
 
 function ligarEventos() {
   $$('[data-acao]').forEach((b) => { b.onclick = () => { vibrar(); acoes[b.dataset.acao]?.(b.dataset) } })
+
+  const grupoEu = $('#chipsEu')
+  if (grupoEu) $$('.chip', grupoEu).forEach((c) => {
+    c.onclick = async () => {
+      vibrar()
+      await api('/settings', { body: { eu: c.dataset.v } })
+      toast(c.dataset.v ? `Beleza, ${c.textContent.replace('🫵 ', '')} é você.` : 'Desmarcado.')
+      render()
+    }
+  })
 }
 
 const acoes = {
@@ -441,6 +572,32 @@ const acoes = {
   'cobrar': ({ card }) => formCobranca(card),
   'ver-fatura': ({ card }) => verFaturas(card),
   'abrir-lote': () => formLote(),
+  'ver-minha-parte': ({ card }) => detalheMinhaParte(card),
+
+  'copiar-minha-parte': () => {
+    const mp = S.minhaParte
+    let t = `👤 *Minha parte das faturas*\n\n`
+    for (const c of mp.porCartao) {
+      t += `*${c.card}* (${mesLongo(c.competencia)})${c.vencimento ? ` — vence ${new Date(c.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}\n`
+      t += c.itens.map((i) => `  ▸ ${dataBR(i.at)} ${money(i.value)}${i.note ? ` — ${i.note}` : ''}${i.parcela ? ` [${i.parcela.n}/${i.parcela.total}]` : ''}`).join('\n')
+      t += `\n  _subtotal: ${money(c.total)}${c.pago ? ` · já paguei ${money(c.pago)} · falta ${money(Math.max(c.falta, 0))}` : ''}_\n\n`
+    }
+    if (mp.semCartao.total > 0) t += `*Sem cartão*: ${money(mp.semCartao.total)}\n\n`
+    t += `━━━━━━━━━━\nTotal lançado: ${money(mp.total)}\n`
+    if (mp.pago) t += `Já paguei: ${money(mp.pago)}\n`
+    t += `💰 *Ainda tenho que pagar: ${money(Math.max(mp.aPagar, 0))}*`
+    copiar(t, 'Sua parte copiada!')
+  },
+
+  'copiar-todos': () => {
+    const devedores = S.pessoas.filter((p) => !p.eu && p.saldo > 0.009)
+    const total = devedores.reduce((s, p) => s + p.saldo, 0)
+    let t = '💰 *Quem está devendo*\n\n'
+    t += devedores.map((p) => `▸ ${p.name}: *${money(p.saldo)}*`).join('\n')
+    t += `\n\n━━━━━━━━━━\n💸 *Total a receber: ${money(total)}*`
+    if (S.settings.pix) t += `\n\n🔑 *PIX:* ${S.settings.pix}${S.settings.pixNome ? `\n_(${S.settings.pixNome})_` : ''}`
+    copiar(t, 'Resumo copiado!')
+  },
 
   'del-conta': async ({ conta }) => {
     if (!await confirmar(`Excluir os extratos da conta "${conta}"?`, 'Excluir')) return
@@ -581,16 +738,26 @@ function fichaPessoa(chave) {
   const ultimos = p.items.slice(-12).reverse()
 
   const { bg, fechar } = sheet({
-    titulo: p.name,
+    titulo: p.name + (p.eu ? ' (você)' : ''),
     corpo: `
       <div class="grid g2" style="margin-bottom:14px">
-        <div class="kpi warn"><div class="lbl">Deve</div><div class="val">${money(p.saldo)}</div></div>
-        <div class="kpi ok"><div class="lbl">Já pagou</div><div class="val">${money(p.totalPaid)}</div></div>
+        <div class="kpi ${p.eu ? '' : 'warn'}"><div class="lbl">${p.eu ? 'Minha parte (tudo)' : 'Deve'}</div><div class="val">${money(p.saldo)}</div><div class="sub">${money(p.totalItems)} lançados</div></div>
+        <div class="kpi ok"><div class="lbl">${p.eu ? 'Já paguei' : 'Já pagou'}</div><div class="val">${money(p.totalPaid)}</div></div>
       </div>
+
+      ${p.eu
+        ? '<div class="banner info">🫵 Essa é você. Seus gastos não entram em "a receber" e você nunca é cobrada(o).</div>'
+        : `<button class="btn full" data-copiar="/texto/pessoa?p=${encodeURIComponent(p.key)}" data-rotulo="Mensagem copiada — é só colar no WhatsApp!" style="margin-bottom:10px">📋 Copiar cobrança para mandar</button>`}
+
       <div class="btn-row" style="margin-bottom:16px">
-        <button class="btn" data-f="receber">💵 Recebi</button>
+        <button class="btn ${p.eu ? '' : 'ghost'}" data-f="receber">💵 ${p.eu ? 'Registrar que paguei' : 'Recebi'}</button>
         <button class="btn ghost" data-f="editar">✏️ Editar</button>
       </div>
+
+      <button class="btn ghost full" data-f="marcar-eu" style="margin-bottom:16px">
+        ${p.eu ? '🫵 Não sou eu (desmarcar)' : '🫵 Sou eu'}
+      </button>
+
       <h3 style="font-size:13px;margin-bottom:8px">Últimos lançamentos</h3>
       <div class="rows">
         ${ultimos.length ? ultimos.map((i) => `<div class="row-item" style="cursor:default">
@@ -601,8 +768,51 @@ function fichaPessoa(chave) {
       </div>`,
   })
 
+  ligarCopia(bg)
   $('[data-f="receber"]', bg).onclick = () => { fechar(); setTimeout(() => formPagamento(p), 200) }
   $('[data-f="editar"]', bg).onclick = () => { fechar(); setTimeout(() => formPessoa(p), 200) }
+  $('[data-f="marcar-eu"]', bg).onclick = async () => {
+    vibrar()
+    await api('/settings', { body: { eu: p.eu ? '' : p.key } })
+    fechar()
+    toast(p.eu ? 'Desmarcado.' : `Beleza, ${p.name} é você.`)
+    render()
+  }
+}
+
+/** Detalhe da SUA parte num cartão: item a item, com o total a pagar */
+function detalheMinhaParte(cardKey) {
+  const c = S.minhaParte.porCartao.find((x) => x.cardKey === cardKey)
+  if (!c) return
+  const falta = c.falta
+
+  const { bg } = sheet({
+    titulo: `Minha parte — ${c.card}`,
+    corpo: `
+      <div style="text-align:center;padding:2px 0 14px">
+        <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">${falta > 0.009 ? 'Eu pago nesta fatura' : 'Quitado'}</div>
+        <div style="font-size:32px;font-weight:700;letter-spacing:-1.2px;margin-top:3px${falta <= 0.009 ? ';color:var(--ok)' : ''}">${money(Math.max(falta, 0))}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:4px">
+          fatura de ${mesLongo(c.competencia)}${c.vencimento ? ` · vence ${new Date(c.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+        </div>
+        ${c.pago ? `<div class="tag ok" style="margin-top:8px">já paguei ${money(c.pago)} de ${money(c.total)}</div>` : ''}
+      </div>
+      <div class="rows">
+        ${c.itens.map((i) => `<div class="row-item" style="cursor:default">
+          <span class="grow"><span class="t1" style="font-weight:500;font-size:14px">${esc(i.note || 'sem descrição')}</span>
+          <span class="t2">${dataBR(i.at)}${i.parcela ? ` · parcela ${i.parcela.n}/${i.parcela.total}` : ''}</span></span>
+          <b class="v">${money(i.value)}</b></div>`).join('')}
+      </div>`,
+    acoes: [{ label: '📋 Copiar', classe: 'ghost', onClick: () => {
+      let t = `👤 *Minha parte — ${c.card}* (${mesLongo(c.competencia)})\n\n`
+      t += c.itens.map((i) => `▸ ${dataBR(i.at)} ${money(i.value)}${i.note ? ` — ${i.note}` : ''}${i.parcela ? ` [${i.parcela.n}/${i.parcela.total}]` : ''}`).join('\n')
+      t += `\n\n━━━━━━━━━━\nTotal lançado: ${money(c.total)}\n`
+      if (c.pago) t += `Já paguei: ${money(c.pago)}\n`
+      t += `💰 *Falta pagar: ${money(Math.max(falta, 0))}*`
+      copiar(t, 'Copiado!')
+    } }],
+  })
+  void bg
 }
 
 function fichaGasto(id) {
@@ -859,6 +1069,7 @@ const ROTULO = {
   enviado: '<span class="tag ok">enviado</span>',
   simulado: '<span class="tag accent">simulado</span>',
   quitado: '<span class="tag ok">quitado</span>',
+  'sou-eu': '<span class="tag accent">sou eu</span>',
   'sem-telefone': '<span class="tag warn">sem telefone</span>',
   offline: '<span class="tag danger">bot offline</span>',
   'limite-diario': '<span class="tag warn">limite</span>',
@@ -877,21 +1088,25 @@ function resultadoCobranca(resultados, simulado, reenviar = null) {
     },
   }] : []
 
-  sheet({
+  const comTexto = resultados.filter((r) => r.texto)
+  const { bg } = sheet({
     titulo: simulado ? '🧪 Simulação' : '📤 Enviado',
     corpo: `
-      ${simulado ? '<div class="banner warn">Nada foi enviado — isso é só a prévia.</div>' : '<div class="banner ok">Mensagens enviadas.</div>'}
+      ${simulado ? '<div class="banner warn">Nada foi enviado — isso é só a prévia. Dá para copiar e mandar à mão.</div>' : '<div class="banner ok">Mensagens enviadas.</div>'}
       <div class="rows">
         ${resultados.map((r) => `<div class="row-item" style="cursor:default">
-          <span class="avatar">${esc(iniciais(r.name))}</span>
+          <span class="avatar">${r.status === 'sou-eu' ? '🫵' : esc(iniciais(r.name))}</span>
           <span class="grow"><span class="t1">${esc(r.name)}</span><span class="t2">${money(r.valor)}</span></span>
           ${ROTULO[r.status] || esc(r.status)}</div>`).join('')}
       </div>
-      ${resultados.filter((r) => r.texto).map((r) => `
-        <h3 style="margin:18px 0 8px;font-size:13px">📄 Mensagem para ${esc(r.name)}</h3>
-        <div class="msg-preview">${esc(r.texto)}</div>`).join('')}`,
+      ${comTexto.map((r, i) => `
+        <h3 style="margin:18px 0 8px;font-size:13px">📄 Para ${esc(r.name)}
+          <button class="btn ghost sm push" data-copiar="#msg${i}" data-rotulo="Mensagem copiada!">📋 Copiar</button>
+        </h3>
+        <div class="msg-preview" id="msg${i}">${esc(r.texto)}</div>`).join('')}`,
     acoes,
   })
+  ligarCopia(bg)
 }
 
 function verFaturas(cardKey) {
@@ -904,21 +1119,26 @@ function verFaturas(cardKey) {
   })
 
   const carregar = async () => {
-    const f = await api(`/fatura?card=${encodeURIComponent(cardKey)}&comp=${encodeURIComponent($('#fvComp', bg).value)}`)
+    const comp = $('#fvComp', bg).value
+    const f = await api(`/fatura?card=${encodeURIComponent(cardKey)}&comp=${encodeURIComponent(comp)}`)
     const nomes = Object.fromEntries(S.pessoas.map((p) => [p.key, p.name]))
+    const minha = f.pessoas.find((p) => p.person === S.eu)
     $('#fvBody', bg).innerHTML = `
       <div class="grid g2" style="margin-bottom:14px">
         <div class="kpi"><div class="lbl">Total</div><div class="val">${money(f.total)}</div></div>
         <div class="kpi warn"><div class="lbl">Em aberto</div><div class="val">${money(f.aberto)}</div></div>
       </div>
+      ${minha ? `<div class="banner info">🫵 Sua parte nesta fatura: <b>${money(minha.aberto)}</b></div>` : ''}
+      <button class="btn ghost full" data-copiar="/texto/fatura?card=${encodeURIComponent(cardKey)}&comp=${encodeURIComponent(comp)}" data-rotulo="Resumo da fatura copiado!" style="margin-bottom:14px">📋 Copiar resumo desta fatura</button>
       <div class="rows">
         ${f.lancamentos.length ? f.lancamentos.map((i) => `<div class="row-item" style="cursor:default">
-          <span class="avatar">${esc(iniciais(nomes[i.person] || i.person))}</span>
+          <span class="avatar">${i.person === S.eu ? '🫵' : esc(iniciais(nomes[i.person] || i.person))}</span>
           <span class="grow"><span class="t1">${esc(nomes[i.person] || i.person)}</span>
           <span class="t2">${dataBR(i.at)}${i.note ? ' · ' + esc(i.note) : ''}${i.parcela ? ` · ${i.parcela.n}/${i.parcela.total}` : ''}</span></span>
           <b class="v">${money(i.value)}</b></div>`).join('')
           : '<div class="empty">Nenhum lançamento nesta fatura.</div>'}
       </div>`
+    ligarCopia(bg)
   }
   $('#fvComp', bg).onchange = carregar
   carregar()

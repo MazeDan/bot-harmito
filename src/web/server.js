@@ -4,7 +4,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
-import { cobrar, rodarLembretes } from '../lib/cobranca.js'
+import { cobrar, montarMensagemPessoa, montarResumoFatura, rodarLembretes } from '../lib/cobranca.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
@@ -91,11 +91,15 @@ function montarEstado() {
     return { ...c, fatura: f, competencias: fin.competenciasDoCartao(c.key) }
   })
 
-  const pessoas = fin.allBalances()
+  const eu = fin.euKey()
+  const pessoas = fin.allBalances().map((p) => ({ ...p, eu: p.key === eu }))
+  const outros = pessoas.filter((p) => !p.eu)
   const hoje = fin.ym(new Date())
   const gastosMes = fin.raw().expenses.filter((e) => e.competencia === hoje)
 
   return {
+    eu,
+    minhaParte: fin.minhaParte(),
     online: isOnline(),
     cobranca: { dryRun: config.cobranca.dryRun, ativo: config.cobranca.ativo, horario: config.cobranca.horario },
     settings: fin.getSettings(),
@@ -109,7 +113,8 @@ function montarEstado() {
     resumo: {
       competencia: hoje,
       totalMes: round2(gastosMes.reduce((s, e) => s + e.value, 0)),
-      aReceber: round2(pessoas.reduce((s, p) => s + Math.max(0, p.saldo), 0)),
+      // "a receber" nunca conta os seus próprios gastos
+      aReceber: round2(outros.reduce((s, p) => s + Math.max(0, p.saldo), 0)),
       totalFaturas: round2(cards.reduce((s, c) => s + (c.fatura?.total || 0), 0)),
       emAberto: round2(cards.reduce((s, c) => s + (c.fatura?.aberto || 0), 0)),
       proximoVencimento: cards
@@ -216,9 +221,25 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true, state: montarEstado() })
   }
 
+  // --- textos prontos para copiar ---
+  if (p === '/texto/pessoa' && m === 'GET') {
+    const texto = montarMensagemPessoa(url.searchParams.get('p'))
+    if (!texto) return json(res, 404, { erro: 'Pessoa não encontrada.' })
+    return json(res, 200, { texto })
+  }
+  if (p === '/texto/fatura' && m === 'GET') {
+    const texto = montarResumoFatura(url.searchParams.get('card'), url.searchParams.get('comp'))
+    if (!texto) return json(res, 404, { erro: 'Cartão não encontrado.' })
+    return json(res, 200, { texto })
+  }
+
   // --- configurações ---
   if (p === '/settings' && m === 'POST') {
-    const s = await fin.setSettings({ pix: body.pix ?? '', pixNome: body.pixNome ?? '' })
+    const patch = {}
+    if (body.pix !== undefined) patch.pix = body.pix
+    if (body.pixNome !== undefined) patch.pixNome = body.pixNome
+    if (body.eu !== undefined) patch.eu = body.eu
+    const s = await fin.setSettings(patch)
     return json(res, 200, { ok: true, settings: s, state: montarEstado() })
   }
 

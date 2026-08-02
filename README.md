@@ -76,6 +76,8 @@ O bot mostra a prévia com o total e só grava depois do `/confirmar` (ou `/canc
 |---|---|
 | `/pessoa danilo 11999998888` | Vincula o telefone (necessário para cobrar) |
 | `/pessoa` | Lista as pessoas e seus números |
+| `/eu danilo` | Marca quem é **você** — seus gastos saem de "a receber" e você nunca é cobrado |
+| `/eu` | Mostra quanto da fatura de cada cartão é seu, item a item |
 | `/cobrar nubank` | **Simula** a cobrança e te mostra as mensagens |
 | `/cobrar nubank real` | Envia de verdade |
 
@@ -92,6 +94,8 @@ Dá para **instalar como app**: abra no Chrome/Safari do celular e use *Adiciona
 Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
 
 - **Resumo** — faturas abertas, a receber, próximo vencimento, evolução de 12 meses, divisão por cartão, parcelas comprometidas nos meses à frente
+- **Minha parte** — bloco em destaque com quanto da fatura é seu, quebrado por cartão e item a item. Marque quem é você tocando numa pessoa → *Sou eu* (ou na aba Mais). Seus gastos somem de "a receber", você nunca entra na cobrança, mas continuam contando no total da fatura
+- **Botões 📋 Copiar** — em toda tela onde faz sentido: a cobrança pronta de uma pessoa (com todos os cartões, o total e o PIX), o resumo de uma fatura inteira, a lista de quem está devendo com o total geral, e a sua parte. É só colar no WhatsApp
 - **Cartões** — fatura atual, uso do limite, quem deve o quê, cobrar, histórico de faturas
 - **Pessoas** — saldos e telefone; toque numa pessoa para ver o extrato dela e registrar pagamento (com atalhos "Tudo" e "Metade")
 - **Histórico** — lançamentos agrupados por dia; toque num item para ver detalhes ou excluir
