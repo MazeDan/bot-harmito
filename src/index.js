@@ -6,7 +6,10 @@ import makeWASocket, {
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { handleMessage, loadCommands } from './handler.js'
+import { iniciarAgendador } from './lib/cobranca.js'
 import { initFinance } from './lib/finance.js'
+import { setSock } from './lib/wa.js'
+import { iniciarPainel } from './web/server.js'
 
 const logger = pino({ level: 'silent' })
 
@@ -20,6 +23,7 @@ async function start() {
     logger,
   })
 
+  setSock(sock)
   sock.ev.on('creds.update', saveCreds)
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
@@ -53,4 +57,6 @@ async function start() {
 
 initFinance()
 await loadCommands()
+iniciarPainel()
+iniciarAgendador()
 await start()

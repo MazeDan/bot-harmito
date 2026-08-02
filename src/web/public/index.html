@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel Financeiro</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💳</text></svg>">
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">💳</div>
+        <div><b>Financeiro</b><span>controle de cartões</span></div>
+      </div>
+      <button class="nav-item on" data-tab="resumo"><span class="ic">📊</span> Resumo</button>
+      <button class="nav-item" data-tab="cartoes"><span class="ic">💳</span> Cartões</button>
+      <button class="nav-item" data-tab="pessoas"><span class="ic">👥</span> Pessoas</button>
+      <button class="nav-item" data-tab="lancar"><span class="ic">✍️</span> Lançar</button>
+      <button class="nav-item" data-tab="historico"><span class="ic">🧾</span> Histórico</button>
+      <button class="nav-item" data-tab="extratos"><span class="ic">🏦</span> Extratos</button>
+      <button class="nav-item" data-tab="config"><span class="ic">⚙️</span> Configurações</button>
+      <div class="side-foot">
+        <small id="statusBot">—</small>
+        <small id="statusCobranca">—</small>
+      </div>
+    </aside>
+    <main class="main" id="main"><div class="empty"><span class="big">⏳</span>Carregando…</div></main>
+  </div>
+  <div id="modalHost"></div>
+  <div id="toastHost"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
