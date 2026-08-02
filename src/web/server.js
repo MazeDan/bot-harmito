@@ -17,8 +17,14 @@ let server = null
 
 export function painelURL() {
   if (!server) return null
-  return `http://${config.web.host === '0.0.0.0' ? 'localhost' : config.web.host}:${config.web.port}/?t=${token}`
+  if (config.web.urlPublica) return config.web.urlPublica.replace(/\/+$/, '')
+  const host = config.web.host === '0.0.0.0' ? 'localhost' : config.web.host
+  const porta = config.web.port === 80 ? '' : `:${config.web.port}`
+  return `http://${host}${porta}`
 }
+
+/** Senha do painel — só mostrada no log/`/painel` quando é gerada automaticamente */
+export const painelSenhaAutomatica = () => (config.web.token ? null : token)
 
 // ---------- helpers ----------
 
@@ -35,6 +41,27 @@ function tokenOk(given) {
   const b = Buffer.from(token)
   return a.length === b.length && timingSafeEqual(a, b)
 }
+
+// Trava contra força bruta: N erros seguidos de um IP bloqueiam por um tempo.
+const MAX_ERROS = 8
+const BLOQUEIO_MS = 15 * 60_000
+const tentativas = new Map()
+
+function bloqueado(ip) {
+  const t = tentativas.get(ip)
+  if (!t) return false
+  if (Date.now() - t.em > BLOQUEIO_MS) { tentativas.delete(ip); return false }
+  return t.erros >= MAX_ERROS
+}
+
+function registrarErro(ip) {
+  const t = tentativas.get(ip)
+  if (!t || Date.now() - t.em > BLOQUEIO_MS) tentativas.set(ip, { erros: 1, em: Date.now() })
+  else { t.erros++; t.em = Date.now() }
+  console.warn(`🔒 Painel: senha errada de ${ip} (${tentativas.get(ip).erros}/${MAX_ERROS})`)
+}
+
+const ipDe = (req) => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?'
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -212,23 +239,37 @@ export function iniciarPainel() {
   token = config.web.token || randomBytes(12).toString('hex')
 
   server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`)
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+    const ip = ipDe(req)
 
-    // O token pode vir na query (?t=) ou no header x-token
-    const dado = url.searchParams.get('t') || req.headers['x-token']
-    const publico = url.pathname === '/' || !url.pathname.startsWith('/api')
+    // Healthcheck do proxy da hospedagem — responde sem exigir senha
+    if (url.pathname === '/health') {
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      return res.end('ok')
+    }
 
-    if (url.pathname.startsWith('/api') && !tokenOk(dado)) {
-      return json(res, 401, { erro: 'Token inválido. Use o link do comando /painel.' })
+    // A página em si é pública (é só a casca); os dados é que são protegidos.
+    if (!url.pathname.startsWith('/api')) {
+      try { return servirEstatico(res, url.pathname) } catch (err) {
+        console.error('Erro servindo arquivo:', err)
+        res.writeHead(500); return res.end()
+      }
     }
-    if (url.pathname === '/' && !tokenOk(dado)) {
-      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' })
-      return res.end('<h1 style="font:600 20px system-ui;padding:40px">🔒 Token inválido.</h1><p style="font:14px system-ui;padding:0 40px">Peça o link ao bot com o comando <code>/painel</code>.</p>')
+
+    if (bloqueado(ip)) {
+      return json(res, 429, { erro: 'Muitas tentativas erradas. Tente de novo em 15 minutos.' })
     }
+
+    // Senha no header (preferido) ou na query, para compatibilidade
+    const dado = req.headers['x-token'] || url.searchParams.get('t')
+    if (!tokenOk(dado)) {
+      registrarErro(ip)
+      return json(res, 401, { erro: 'Senha inválida.' })
+    }
+    tentativas.delete(ip)
 
     try {
-      if (url.pathname.startsWith('/api')) return await api(req, res, url)
-      if (publico) return servirEstatico(res, url.pathname)
+      return await api(req, res, url)
     } catch (err) {
       console.error('Erro no painel:', err)
       return json(res, 500, { erro: err.message })
@@ -237,7 +278,10 @@ export function iniciarPainel() {
 
   server.listen(config.web.port, config.web.host, () => {
     console.log(`🖥️  Painel financeiro: ${painelURL()}`)
-    if (!config.web.token) console.log('   (token aleatório — defina PAINEL_TOKEN no ambiente para um link fixo)')
+    if (!config.web.token) {
+      console.log(`   🔑 Senha desta sessão: ${token}`)
+      console.log('   (defina PAINEL_TOKEN no ambiente para uma senha fixa)')
+    }
   })
 
   server.on('error', (err) => {

@@ -1,4 +1,4 @@
-import { painelURL } from '../web/server.js'
+import { painelSenhaAutomatica, painelURL } from '../web/server.js'
 
 export default {
   name: 'painel',
@@ -8,10 +8,13 @@ export default {
   async run({ sock, msg, chatId }) {
     const url = painelURL()
     if (!url) throw new Error('O painel web está desligado (config.web.ativo = false).')
-    await sock.sendMessage(
-      chatId,
-      { text: `🖥️ *Painel financeiro*\n\n${url}\n\n_Abra no navegador da máquina onde o bot está rodando. O link já vem com o token de acesso — não repasse._` },
-      { quoted: msg },
-    )
+
+    const senha = painelSenhaAutomatica()
+    let texto = `🖥️ *Painel financeiro*\n\n${url}\n`
+    texto += senha
+      ? `\n🔑 Senha desta sessão: *${senha}*\n_(ela muda a cada reinício — defina PAINEL_TOKEN para fixar)_`
+      : '\n_Entre com a senha que você configurou em PAINEL_TOKEN._'
+
+    await sock.sendMessage(chatId, { text: texto }, { quoted: msg })
   },
 }

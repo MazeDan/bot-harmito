@@ -1,8 +1,20 @@
 /* Painel financeiro — vanilla JS, sem dependências externas. */
 
-const TOKEN = new URLSearchParams(location.search).get('t') || ''
 let S = null            // estado vindo do servidor
 let TAB = 'resumo'
+
+/* A senha fica só no sessionStorage — nunca na URL, para não vazar em
+   histórico de navegador nem em log de proxy. */
+const CHAVE = 'painel_token'
+let TOKEN = sessionStorage.getItem(CHAVE) || ''
+
+// Se veio um link antigo com ?t=, guarda e limpa a URL na hora
+const naQuery = new URLSearchParams(location.search).get('t')
+if (naQuery) {
+  TOKEN = naQuery
+  sessionStorage.setItem(CHAVE, TOKEN)
+  history.replaceState(null, '', location.pathname)
+}
 
 // ---------- utilidades ----------
 
@@ -20,16 +32,52 @@ const mesLongo = (ym) => {
 }
 
 async function api(rota, opts = {}) {
-  const url = `/api${rota}${rota.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}`
-  const res = await fetch(url, {
+  const headers = { 'x-token': TOKEN }
+  if (opts.body) headers['content-type'] = 'application/json'
+  const res = await fetch(`/api${rota}`, {
     method: opts.method || (opts.body ? 'POST' : 'GET'),
-    headers: opts.body ? { 'content-type': 'application/json' } : {},
+    headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
+  if (res.status === 401) { sessionStorage.removeItem(CHAVE); TOKEN = ''; telaLogin(data.erro); throw new Error(data.erro || 'Senha inválida.') }
   if (!res.ok) throw new Error(data.erro || `Erro ${res.status}`)
-  if (data.state) { S = data.state; }
+  if (data.state) { S = data.state }
   return data
+}
+
+function telaLogin(erro = '') {
+  document.querySelector('.app').style.display = 'none'
+  const antigo = document.getElementById('login')
+  if (antigo) antigo.remove()
+  const tela = el(`<div id="login" style="min-height:100vh;display:grid;place-items:center;padding:20px">
+    <div class="card" style="width:min(380px,100%);text-align:center">
+      <div style="font-size:38px;margin-bottom:6px">💳</div>
+      <h3 style="font-size:17px;margin-bottom:4px">Painel Financeiro</h3>
+      <p class="muted" style="font-size:13px;margin-bottom:18px">Entre com a senha do painel</p>
+      ${erro ? `<div class="banner warn" style="text-align:left">⚠️ ${esc(erro)}</div>` : ''}
+      <div class="field"><input id="loginSenha" type="password" placeholder="senha" autocomplete="current-password"></div>
+      <button class="btn" id="loginBtn" style="width:100%">Entrar</button>
+      <p class="muted" style="font-size:11.5px;margin-top:14px">A senha aparece no log do bot ao iniciar, ou no comando <code>/painel</code>.</p>
+    </div>
+  </div>`)
+  document.body.append(tela)
+
+  const entrar = async () => {
+    const v = document.getElementById('loginSenha').value.trim()
+    if (!v) return
+    TOKEN = v
+    try {
+      S = await api('/state')
+      sessionStorage.setItem(CHAVE, TOKEN)
+      tela.remove()
+      document.querySelector('.app').style.display = ''
+      render()
+    } catch { /* api já reexibe a tela com o erro */ }
+  }
+  document.getElementById('loginBtn').onclick = entrar
+  document.getElementById('loginSenha').onkeydown = (e) => { if (e.key === 'Enter') entrar() }
+  document.getElementById('loginSenha').focus()
 }
 
 function toast(msg, tipo = 'ok') {
@@ -736,12 +784,11 @@ document.querySelectorAll('.nav-item').forEach((b) => {
 
 window.addEventListener('unhandledrejection', (e) => toast(e.reason?.message || 'Erro inesperado', 'err'))
 
-api('/state')
-  .then((s) => { S = s; render() })
-  .catch((e) => { $('#main').innerHTML = `<div class="card"><div class="empty"><span class="big">🔒</span>${esc(e.message)}</div></div>` })
+if (!TOKEN) telaLogin()
+else api('/state').then((s) => { S = s; render() }).catch(() => {})
 
 // atualiza sozinho a cada 30s se não tiver modal aberto
 setInterval(async () => {
-  if ($('.modal-bg')) return
+  if ($('.modal-bg') || !TOKEN) return
   try { S = await api('/state'); render() } catch {}
 }, 30_000)

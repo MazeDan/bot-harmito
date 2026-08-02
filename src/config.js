@@ -25,11 +25,14 @@ export const config = {
   web: {
     ativo: process.env.PAINEL_ATIVO !== '0',
     port: Number(process.env.PAINEL_PORT || 3333),
-    // Token de acesso. Se vazio, um token aleatório é gerado a cada boot e
-    // impresso no console. Defina PAINEL_TOKEN para ter um link fixo.
+    // Senha de acesso ao painel. Se vazia, uma aleatória é gerada a cada boot
+    // e impressa no log. Em servidor, defina PAINEL_TOKEN (senha longa!).
     token: process.env.PAINEL_TOKEN || '',
-    // 127.0.0.1 = só a sua máquina. Use 0.0.0.0 por sua conta e risco.
+    // 127.0.0.1 = só a sua máquina. Em hospedagem (Square Cloud etc.) precisa
+    // ser 0.0.0.0 para o proxy conseguir alcançar o processo.
     host: process.env.PAINEL_HOST || '127.0.0.1',
+    // URL pública, quando atrás de proxy/HTTPS. Usada pelo comando /painel.
+    urlPublica: process.env.PAINEL_URL || '',
   },
 
   // Cobrança automática por WhatsApp

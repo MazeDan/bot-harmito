@@ -3,3 +3,4 @@ auth/
 data/
 *.log
 .claude
+.env

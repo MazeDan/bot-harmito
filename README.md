@@ -85,7 +85,7 @@ Todo dia às 09:00 o bot checa os vencimentos e dispara os lembretes em **D-5, D
 
 ### Painel web
 
-`/painel` devolve o link (algo como `http://localhost:3333/?t=abc123`). Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
+`/painel` devolve o link e a senha. Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
 
 - **Resumo** — faturas abertas, a receber, próximo vencimento, evolução de 12 meses, divisão por cartão e por pessoa, parcelas comprometidas nos meses à frente
 - **Cartões** — fatura atual, uso do limite, quem deve o quê, cobrar, histórico de faturas
@@ -95,7 +95,28 @@ Todo dia às 09:00 o bot checa os vencimentos e dispara os lembretes em **D-5, D
 - **Extratos** — o que veio dos PDFs
 - **Configurações** — chave PIX e disparo manual dos lembretes
 
-Variáveis de ambiente: `PAINEL_PORT` (3333), `PAINEL_TOKEN` (fixo; se vazio gera um aleatório a cada boot), `PAINEL_HOST` (127.0.0.1), `PAINEL_ATIVO=0` para desligar. Cobrança: `COBRANCA_REAL=1`, `COBRANCA_HORARIO`, `COBRANCA_MAX`, `COBRANCA_ATIVA=0`.
+A senha vai só no `sessionStorage` do navegador — nunca na URL — e a API bloqueia o IP por 15 minutos depois de 8 senhas erradas.
+
+Variáveis de ambiente (veja [.env.example](.env.example)): `PAINEL_PORT` (3333), `PAINEL_HOST` (127.0.0.1), `PAINEL_TOKEN` (senha fixa; se vazia gera uma aleatória a cada boot e imprime no log), `PAINEL_URL` (URL pública, para o `/painel`), `PAINEL_ATIVO=0` para desligar. Cobrança: `COBRANCA_REAL=1`, `COBRANCA_HORARIO`, `COBRANCA_MAX`, `COBRANCA_ATIVA=0`.
+
+## Deploy na Square Cloud
+
+O [squarecloud.app](squarecloud.app) já está configurado (`SUBDOMAIN=harmito`, `MAIN=src/index.js`). A Square Cloud só alcança o processo em **`0.0.0.0:80`** — por isso o `.env` precisa ir junto no zip:
+
+```
+PAINEL_HOST=0.0.0.0
+PAINEL_PORT=80
+PAINEL_TOKEN=uma-senha-longa-e-aleatoria
+PAINEL_URL=https://harmito.squareweb.app
+```
+
+Três coisas que **não** estão no git e precisam entrar no zip do deploy:
+
+- **`.env`** — copie de `.env.example` e troque a senha
+- **`auth/`** — a sessão do WhatsApp já pareada (senão o bot vai pedir QR code no log a cada deploy)
+- **`data/`** — seus lançamentos, se já tiver algum
+
+> 🔓 Com o subdomínio ativo o painel fica **acessível por qualquer um na internet** — a senha é a única barreira. Use algo longo e aleatório, e não a repita de outro serviço. Se preferir manter tudo privado, deixe `PAINEL_HOST=127.0.0.1` e acesse por túnel SSH.
 
 ### Extrato bancário (PDF)
 
