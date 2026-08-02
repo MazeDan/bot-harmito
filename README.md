@@ -98,7 +98,7 @@ Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
 - **Botões 📋 Copiar** — em toda tela onde faz sentido: a cobrança pronta de uma pessoa (com todos os cartões, o total e o PIX), o resumo de uma fatura inteira, a lista de quem está devendo com o total geral, e a sua parte. É só colar no WhatsApp
 - **Cartões** — fatura atual, uso do limite, quem deve o quê, cobrar, histórico de faturas
 - **Pessoas** — saldos e telefone; toque numa pessoa para ver o extrato dela e registrar pagamento (com atalhos "Tudo" e "Metade")
-- **Histórico** — lançamentos agrupados por dia; toque num item para ver detalhes ou excluir
+- **Histórico** — agrupe por **dia**, **cartão** ou **pessoa**, e filtre por qualquer cartão e/ou pessoa (os dois combinam). O cabeçalho mostra a contagem e o total do filtro; toque num item para ver detalhes ou excluir. Os botões *📜 Histórico* (no cartão) e *📜 Ver tudo* (na pessoa) já abrem filtrado
 - **Mais** — lote, extratos dos PDFs, chave PIX e disparo manual dos lembretes
 - **Botão `+`** — valor, pessoa, cartão, parcelas e data selecionados por toque; mostra "3x de R$ 100,00" enquanto você digita
 

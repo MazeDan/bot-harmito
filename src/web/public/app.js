@@ -229,12 +229,18 @@ const TITULOS = {
   resumo: ['Resumo', () => `Fatura de ${mesLongo(S.resumo.competencia)}`],
   cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
   pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => !p.eu && p.saldo > 0.009).length} devendo`],
-  historico: ['Histórico', () => `${S.expenses.length} lançamentos`],
+  historico: ['Histórico', () => {
+    const partes = []
+    if (HIST.cartao) partes.push(HIST.cartao === '__sem' ? 'sem cartão' : S.cards.find((c) => c.key === HIST.cartao)?.name ?? '')
+    if (HIST.pessoa) partes.push(S.pessoas.find((p) => p.key === HIST.pessoa)?.name ?? '')
+    return partes.length ? partes.join(' · ') : `${S.expenses.length} lançamentos`
+  }],
   mais: ['Mais', () => 'extratos, lote e configurações'],
 }
 
-function render() {
+function render({ manterScroll = false } = {}) {
   if (!S) return
+  const y = window.scrollY
   const [titulo, sub] = TITULOS[TAB]
   $('#tbTitulo').innerHTML = `${titulo}<span class="sub">${esc(sub())}</span>`
   $('#tbStatus').innerHTML = S.online ? '🟢 online' : '🔴 offline'
@@ -242,7 +248,7 @@ function render() {
   $('#main').innerHTML = ({ resumo, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   ligarCopia()
-  window.scrollTo(0, 0)
+  window.scrollTo(0, manterScroll ? y : 0)
 }
 
 const linha = ({ av, t1, t2, v, sub, acao = '', dados = '', cor = '' }) => `
@@ -403,7 +409,8 @@ function cartoes() {
       </div>
       <div class="btn-row" style="margin-top:8px">
         <button class="btn ghost" data-acao="ver-fatura" data-card="${esc(c.key)}">🧾 Faturas</button>
-        <button class="btn ghost" data-acao="editar-cartao" data-card="${esc(c.key)}">✏️ Editar</button>
+        <button class="btn ghost" data-acao="hist-cartao" data-card="${esc(c.key)}">📜 Histórico</button>
+        <button class="btn ghost" data-acao="editar-cartao" data-card="${esc(c.key)}" style="flex:0 0 52px">✏️</button>
       </div>
     </div>`
   }).join('') + `<button class="btn ghost full" style="margin-top:14px" data-acao="novo-cartao">+ Novo cartão</button>`
@@ -445,39 +452,112 @@ function pessoas() {
 }
 
 // --- Histórico ---
+
+/** Filtros do histórico — sobrevivem ao re-render */
+const HIST = { agrupar: 'dia', cartao: null, pessoa: null }
+
 function historico() {
   const nomes = Object.fromEntries(S.pessoas.map((p) => [p.key, p.name]))
   const cartoes_ = Object.fromEntries(S.cards.map((c) => [c.key, c.name]))
-  const gastos = S.expenses.slice(0, 200)
+  const nomeP = (k) => nomes[k] || k
+  const nomeC = (k) => (k ? cartoes_[k] || k : 'Sem cartão')
 
-  // agrupa por dia, que é como a gente lembra dos gastos
-  const grupos = new Map()
-  for (const e of gastos) {
-    const dia = e.at.slice(0, 10)
-    if (!grupos.has(dia)) grupos.set(dia, [])
-    grupos.get(dia).push(e)
+  const passa = (x) =>
+    (!HIST.cartao || (HIST.cartao === '__sem' ? !x.card : x.card === HIST.cartao)) &&
+    (!HIST.pessoa || x.person === HIST.pessoa)
+
+  const gastos = S.expenses.filter(passa)
+  const pagamentos = S.payments.filter(passa)
+  const total = gastos.reduce((s, e) => s + e.value, 0)
+  const totalPago = pagamentos.reduce((s, p) => s + p.value, 0)
+
+  // ---- barra de filtros ----
+  const chip = (rotulo, tipo, valor, ligado) =>
+    `<button class="chip dim ${ligado ? 'on' : ''}" data-filtro="${tipo}" data-v="${esc(valor ?? '')}">${rotulo}</button>`
+
+  const filtros = `
+    <div class="filtros">
+      <div class="rotulo">Agrupar por</div>
+      <div class="chips" style="margin-bottom:12px">
+        ${chip('📅 Dia', 'agrupar', 'dia', HIST.agrupar === 'dia')}
+        ${chip('💳 Cartão', 'agrupar', 'cartao', HIST.agrupar === 'cartao')}
+        ${chip('👥 Pessoa', 'agrupar', 'pessoa', HIST.agrupar === 'pessoa')}
+      </div>
+
+      <div class="rotulo">Filtrar</div>
+      <div class="chips scroll">
+        ${chip('Tudo', 'limpar', '', !HIST.cartao && !HIST.pessoa)}
+        ${S.cards.map((c) => chip('💳 ' + esc(c.name), 'cartao', c.key, HIST.cartao === c.key)).join('')}
+        ${S.expenses.some((e) => !e.card) ? chip('💸 Sem cartão', 'cartao', '__sem', HIST.cartao === '__sem') : ''}
+        ${S.pessoas.map((p) => chip((p.eu ? '🫵 ' : '👤 ') + esc(p.name), 'pessoa', p.key, HIST.pessoa === p.key)).join('')}
+      </div>
+
+      <div class="resumo-filtro">
+        <b>${gastos.length}</b> lançamento(s) · <b>${money(total)}</b>${totalPago ? ` · recebido <b>${money(totalPago)}</b>` : ''}
+        ${HIST.cartao || HIST.pessoa ? ` · <span class="tag accent">${[HIST.cartao ? nomeC(HIST.cartao === '__sem' ? null : HIST.cartao) : null, HIST.pessoa ? nomeP(HIST.pessoa) : null].filter(Boolean).map(esc).join(' + ')}</span>` : ''}
+      </div>
+    </div>`
+
+  if (!gastos.length) {
+    return filtros + `<div class="card"><div class="empty"><span class="big">🧾</span>
+      ${S.expenses.length ? 'Nenhum lançamento com esse filtro.' : 'Nenhum gasto lançado ainda.'}</div></div>`
   }
 
-  const blocos = [...grupos.entries()].map(([dia, itens]) => {
-    const total = itens.reduce((s, i) => s + i.value, 0)
-    const d = new Date(dia + 'T12:00:00')
-    const rotulo = dia === hojeISO() ? 'Hoje' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
+  // ---- agrupamento ----
+  const chaves = {
+    dia: (e) => e.at.slice(0, 10),
+    cartao: (e) => e.card || '__sem',
+    pessoa: (e) => e.person,
+  }
+  const rotulos = {
+    dia: (k) => (k === hojeISO() ? 'Hoje' : new Date(k + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })),
+    cartao: (k) => (k === '__sem' ? '💸 Sem cartão' : '💳 ' + nomeC(k)),
+    pessoa: (k) => nomeP(k) + (k === S.eu ? ' (você)' : ''),
+  }
+
+  const grupos = new Map()
+  for (const e of gastos.slice(0, 400)) {
+    const k = chaves[HIST.agrupar](e)
+    if (!grupos.has(k)) grupos.set(k, [])
+    grupos.get(k).push(e)
+  }
+  // dia vem do mais recente; cartão/pessoa do maior total
+  const ordenadas = [...grupos.entries()]
+  if (HIST.agrupar === 'dia') ordenadas.sort((a, b) => b[0].localeCompare(a[0]))
+  else ordenadas.sort((a, b) => b[1].reduce((s, i) => s + i.value, 0) - a[1].reduce((s, i) => s + i.value, 0))
+
+  const blocos = ordenadas.map(([k, itens]) => {
+    const soma = itens.reduce((s, i) => s + i.value, 0)
+    // dentro do grupo, o subtítulo não repete a dimensão do agrupamento
+    const detalhe = (e) => [
+      e.note,
+      HIST.agrupar !== 'cartao' && e.card ? cartoes_[e.card] : null,
+      e.parcela ? `${e.parcela.n}/${e.parcela.total}` : null,
+      HIST.agrupar === 'dia' ? `fatura ${mesBR(e.competencia)}` : dataBR(e.at),
+    ].filter(Boolean).map(esc).join(' · ')
+
     return `<div class="card">
-      <h3>${esc(rotulo)} <span class="push muted" style="font-weight:600;font-size:13px">${money(total)}</span></h3>
+      <h3>${esc(rotulos[HIST.agrupar](k))}
+        <span class="push muted nowrap" style="font-weight:650;font-size:13.5px">${money(soma)}</span>
+      </h3>
       <div class="rows">${itens.map((e) => linha({
-        av: iniciais(nomes[e.person] || e.person), t1: esc(nomes[e.person] || e.person),
-        t2: [e.note, e.card ? cartoes_[e.card] : null, e.parcela ? `${e.parcela.n}/${e.parcela.total}` : null, `fatura ${mesBR(e.competencia)}`].filter(Boolean).map(esc).join(' · '),
+        av: HIST.agrupar === 'pessoa' ? '🧾' : e.person === S.eu ? '🫵' : iniciais(nomeP(e.person)),
+        t1: HIST.agrupar === 'pessoa' ? esc(e.note || 'sem descrição') : esc(nomeP(e.person)),
+        t2: HIST.agrupar === 'pessoa'
+          ? [e.card ? cartoes_[e.card] : null, e.parcela ? `${e.parcela.n}/${e.parcela.total}` : null, dataBR(e.at)].filter(Boolean).map(esc).join(' · ')
+          : detalhe(e),
         v: money(e.value), acao: 'ver-gasto', dados: `data-id="${esc(e.id)}"`,
       })).join('')}</div>
     </div>`
   }).join('')
 
-  const pagamentos = S.payments.slice(0, 40)
-  return (blocos || '<div class="card"><div class="empty"><span class="big">🧾</span>Nenhum gasto lançado ainda.</div></div>') +
-    (pagamentos.length ? `<div class="card"><h3>Pagamentos recebidos</h3><div class="rows">
-      ${pagamentos.map((p) => linha({
-        av: '💵', t1: esc(nomes[p.person] || p.person),
-        t2: `${dataBR(p.at)}${p.card ? ' · ' + esc(cartoes_[p.card] || p.card) : ''}${p.note ? ' · ' + esc(p.note) : ''}`,
+  const pags = pagamentos.slice(0, 60)
+  return filtros + blocos +
+    (pags.length ? `<div class="card"><h3>Pagamentos recebidos
+      <span class="push muted nowrap" style="font-weight:650;font-size:13.5px">${money(totalPago)}</span></h3><div class="rows">
+      ${pags.map((p) => linha({
+        av: '💵', t1: esc(nomeP(p.person)),
+        t2: `${dataBR(p.at)}${p.card ? ' · ' + esc(nomeC(p.card)) : ''}${p.note ? ' · ' + esc(p.note) : ''}`,
         v: money(p.value), cor: 'var(--ok)', acao: 'ver-pagamento', dados: `data-id="${esc(p.id)}"`,
       })).join('')}
     </div></div>` : '')
@@ -551,6 +631,18 @@ function mais() {
 function ligarEventos() {
   $$('[data-acao]').forEach((b) => { b.onclick = () => { vibrar(); acoes[b.dataset.acao]?.(b.dataset) } })
 
+  $$('[data-filtro]').forEach((b) => {
+    b.onclick = () => {
+      vibrar()
+      const { filtro, v } = b.dataset
+      if (filtro === 'limpar') { HIST.cartao = null; HIST.pessoa = null }
+      else if (filtro === 'agrupar') HIST.agrupar = v
+      // clicar de novo no filtro ativo desliga ele
+      else HIST[filtro] = HIST[filtro] === v ? null : v
+      render({ manterScroll: true })
+    }
+  })
+
   const grupoEu = $('#chipsEu')
   if (grupoEu) $$('.chip', grupoEu).forEach((c) => {
     c.onclick = async () => {
@@ -573,6 +665,10 @@ const acoes = {
   'ver-fatura': ({ card }) => verFaturas(card),
   'abrir-lote': () => formLote(),
   'ver-minha-parte': ({ card }) => detalheMinhaParte(card),
+
+  // pula pro histórico já filtrado
+  'hist-cartao': ({ card }) => { HIST.cartao = card; HIST.pessoa = null; HIST.agrupar = 'dia'; TAB = 'historico'; render() },
+  'hist-pessoa': ({ p }) => { HIST.pessoa = p; HIST.cartao = null; HIST.agrupar = 'cartao'; TAB = 'historico'; render() },
 
   'copiar-minha-parte': () => {
     const mp = S.minhaParte
@@ -758,7 +854,9 @@ function fichaPessoa(chave) {
         ${p.eu ? '🫵 Não sou eu (desmarcar)' : '🫵 Sou eu'}
       </button>
 
-      <h3 style="font-size:13px;margin-bottom:8px">Últimos lançamentos</h3>
+      <h3 style="font-size:13px;margin-bottom:8px">Últimos lançamentos
+        <button class="btn ghost sm push" data-f="hist">📜 Ver tudo</button>
+      </h3>
       <div class="rows">
         ${ultimos.length ? ultimos.map((i) => `<div class="row-item" style="cursor:default">
           <span class="grow"><span class="t1" style="font-weight:500;font-size:14px">${esc(i.note || 'sem descrição')}</span>
@@ -769,6 +867,7 @@ function fichaPessoa(chave) {
   })
 
   ligarCopia(bg)
+  $('[data-f="hist"]', bg).onclick = () => { fechar(); acoes['hist-pessoa']({ p: p.key }) }
   $('[data-f="receber"]', bg).onclick = () => { fechar(); setTimeout(() => formPagamento(p), 200) }
   $('[data-f="editar"]', bg).onclick = () => { fechar(); setTimeout(() => formPessoa(p), 200) }
   $('[data-f="marcar-eu"]', bg).onclick = async () => {
