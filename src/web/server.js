@@ -179,6 +179,12 @@ async function api(req, res, url) {
     }
     return json(res, 200, { ok: true, lancados: r.ok.length, parcelas: criados.length, erros: r.erros, state: montarEstado() })
   }
+  if (p.startsWith('/expenses/') && (m === 'PATCH' || m === 'PUT')) {
+    const id = decodeURIComponent(p.slice(10))
+    const r = await fin.updateExpense(id, body, { grupo: body.grupo !== false })
+    if (!r) return json(res, 404, { erro: 'Lançamento não encontrado.' })
+    return json(res, 200, { ok: true, atualizados: r.length, state: montarEstado() })
+  }
   if (p.startsWith('/expenses/') && m === 'DELETE') {
     const id = decodeURIComponent(p.slice(10))
     await fin.deleteExpense(id, { grupo: url.searchParams.get('grupo') === '1' })
@@ -191,6 +197,11 @@ async function api(req, res, url) {
     const b = await fin.addPayment(body.person, body.value, { card: body.card, competencia: body.competencia, note: body.note })
     if (!b) return json(res, 404, { erro: 'Pessoa não encontrada.' })
     return json(res, 200, { ok: true, saldo: b.saldo, state: montarEstado() })
+  }
+  if (p.startsWith('/payments/') && (m === 'PATCH' || m === 'PUT')) {
+    const r = await fin.updatePayment(decodeURIComponent(p.slice(10)), body)
+    if (!r) return json(res, 404, { erro: 'Pagamento não encontrado.' })
+    return json(res, 200, { ok: true, pagamento: r, state: montarEstado() })
   }
   if (p.startsWith('/payments/') && m === 'DELETE') {
     await fin.deletePayment(decodeURIComponent(p.slice(10)))

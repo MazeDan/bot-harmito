@@ -914,50 +914,167 @@ function detalheMinhaParte(cardKey) {
   void bg
 }
 
+/** Em que fatura um gasto cairia num dado cartão — mesma regra do servidor */
+function competenciaLocal(dataISO, cardKey) {
+  const d = new Date(dataISO)
+  const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const c = S.cards.find((x) => x.key === cardKey)
+  if (!c?.fechamento || d.getDate() <= c.fechamento) return mes
+  const n = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Liga um grupo de chips com seleção única; devolve () => valor escolhido */
+function grupoChips(bg, sel, aoTrocar) {
+  const grupo = $(sel, bg)
+  if (!grupo) return () => ''
+  $$('.chip', grupo).forEach((c) => {
+    c.onclick = () => {
+      vibrar()
+      $$('.chip', grupo).forEach((x) => x.classList.remove('on'))
+      c.classList.add('on')
+      aoTrocar?.(c.dataset.v)
+    }
+  })
+  return () => $('.chip.on', grupo)?.dataset.v ?? ''
+}
+
 function fichaGasto(id) {
   const e = S.expenses.find((x) => x.id === id)
   if (!e) return
-  const nome = S.pessoas.find((p) => p.key === e.person)?.name || e.person
-  const cartao = S.cards.find((c) => c.key === e.card)?.name
+  const dataInput = new Date(e.at)
+  const dataVal = `${dataInput.getFullYear()}-${String(dataInput.getMonth() + 1).padStart(2, '0')}-${String(dataInput.getDate()).padStart(2, '0')}`
 
   const { bg, fechar } = sheet({
-    titulo: money(e.value),
-    corpo: `<div class="rows" style="margin-bottom:8px">
-      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Pessoa</span><b>${esc(nome)}</b></div>
-      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Cartão</span><b>${cartao ? esc(cartao) : '—'}</b></div>
-      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Data</span><b>${new Date(e.at).toLocaleDateString('pt-BR')}</b></div>
-      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Cai na fatura</span><b>${mesLongo(e.competencia)}</b></div>
-      ${e.parcela ? `<div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Parcela</span><b>${e.parcela.n} de ${e.parcela.total}</b></div>` : ''}
-      ${e.note ? `<div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Obs</span><b>${esc(e.note)}</b></div>` : ''}
-    </div>`,
+    titulo: 'Editar lançamento',
+    corpo: `
+      <div class="field"><label>Valor${e.parcela ? ' da parcela' : ''}</label>
+        <input id="eValor" class="valor-big" inputmode="decimal" value="${String(e.value.toFixed(2)).replace('.', ',')}"></div>
+
+      <div class="field">
+        <label>Cartão</label>
+        <div class="chips" id="eCartao">
+          ${S.cards.map((c) => `<button class="chip ${c.key === e.card ? 'on' : ''}" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}
+          <button class="chip ${!e.card ? 'on' : ''}" data-v="">sem cartão</button>
+        </div>
+        <div class="banner info" id="eFatura" style="margin:10px 0 0"></div>
+      </div>
+
+      <div class="field">
+        <label>Pessoa</label>
+        <div class="chips" id="ePessoa">
+          ${S.pessoas.map((p) => `<button class="chip ${p.key === e.person ? 'on' : ''}" data-v="${esc(p.key)}">${p.eu ? '🫵 ' : ''}${esc(p.name)}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>Data da compra</label><input id="eData" type="date" value="${dataVal}"></div>
+      </div>
+      <div class="field"><label>Observação</label><input id="eNota" value="${esc(e.note)}" placeholder="lanche, uber…"></div>
+
+      ${e.parcela ? `<div class="banner warn">🔁 Parcela <b>${e.parcela.n} de ${e.parcela.total}</b>. As mudanças de cartão, pessoa e data valem para <b>todas as parcelas</b>; o valor muda só nesta.</div>` : ''}
+
+      <button class="btn danger full" data-f="excluir">${e.parcela ? `Excluir as ${e.parcela.total} parcelas` : 'Excluir lançamento'}</button>`,
     acoes: [{
-      label: e.parcela ? 'Excluir todas as parcelas' : 'Excluir', classe: 'danger',
-      onClick: async ({ fechar }) => {
-        if (!await confirmar(e.parcela ? `Excluir esse lançamento e as ${e.parcela.total} parcelas?` : 'Excluir esse lançamento?', 'Excluir')) return
-        await api(`/expenses/${encodeURIComponent(id)}${e.parcela ? '?grupo=1' : ''}`, { method: 'DELETE' })
-        fechar(); toast('Excluído.'); render()
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const valor = numeroBR($('#eValor', bg).value)
+        if (!valor) return toast('Informe o valor.', 'err')
+        btn.disabled = true
+        try {
+          await api(`/expenses/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: {
+              value: valor,
+              card: pegaCartao() || null,
+              person: pegaPessoa(),
+              at: new Date($('#eData', bg).value + 'T12:00:00').toISOString(),
+              note: $('#eNota', bg).value.trim(),
+            },
+          })
+          fechar(); toast('Lançamento atualizado.'); render({ manterScroll: true })
+        } catch (err) { btn.disabled = false; toast(err.message, 'err') }
       },
     }],
   })
-  void bg; void fechar
+
+  const mostrarFatura = () => {
+    const ck = pegaCartao()
+    const comp = ck ? competenciaLocal($('#eData', bg).value + 'T12:00:00', ck) : $('#eData', bg).value.slice(0, 7)
+    const c = S.cards.find((x) => x.key === ck)
+    const mudou = comp !== e.competencia || ck !== (e.card || '')
+    $('#eFatura', bg).innerHTML = ck
+      ? `📅 Cai na fatura de <b>${mesLongo(comp)}</b>${c?.fechamento ? ` <span class="muted">(fecha dia ${c.fechamento})</span>` : ''}` +
+        (mudou ? `<br><span class="muted">antes: ${mesLongo(e.competencia)}${e.card ? ' · ' + esc(S.cards.find((x) => x.key === e.card)?.name ?? e.card) : ' · sem cartão'}</span>` : '')
+      : `📅 Sem cartão — fica no mês de <b>${mesLongo(comp)}</b>`
+  }
+
+  const pegaCartao = grupoChips(bg, '#eCartao', mostrarFatura)
+  const pegaPessoa = grupoChips(bg, '#ePessoa')
+  $('#eData', bg).onchange = mostrarFatura
+  mostrarFatura()
+
+  $('[data-f="excluir"]', bg).onclick = async () => {
+    if (!await confirmar(e.parcela ? `Excluir esse lançamento e as ${e.parcela.total} parcelas?` : 'Excluir esse lançamento?', 'Excluir')) return
+    await api(`/expenses/${encodeURIComponent(id)}${e.parcela ? '?grupo=1' : ''}`, { method: 'DELETE' })
+    fechar(); toast('Excluído.'); render({ manterScroll: true })
+  }
 }
 
 function fichaPagamento(id) {
   const p = S.payments.find((x) => x.id === id)
   if (!p) return
   const nome = S.pessoas.find((x) => x.key === p.person)?.name || p.person
-  sheet({
-    titulo: `${money(p.value)} de ${nome}`,
-    corpo: `<p class="muted" style="font-size:14px;padding:4px 0 12px">Recebido em ${new Date(p.at).toLocaleDateString('pt-BR')}${p.note ? ` · ${esc(p.note)}` : ''}.</p>`,
+
+  const { bg, fechar } = sheet({
+    titulo: `Pagamento de ${nome}`,
+    corpo: `
+      <div class="field"><label>Valor recebido</label>
+        <input id="pgValor" class="valor-big" inputmode="decimal" value="${String(p.value.toFixed(2)).replace('.', ',')}"></div>
+
+      <div class="field">
+        <label>Abater de qual cartão</label>
+        <div class="chips" id="pgCartao">
+          <button class="chip ${!p.card ? 'on' : ''}" data-v="">Geral</button>
+          ${S.cards.map((c) => `<button class="chip ${c.key === p.card ? 'on' : ''}" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}
+        </div>
+        <div class="banner info" id="pgFatura" style="margin:10px 0 0"></div>
+      </div>
+
+      <div class="field"><label>Observação</label><input id="pgNota" value="${esc(p.note || '')}" placeholder="pix, dinheiro…"></div>
+      <p class="muted" style="font-size:12.5px;margin-bottom:14px">Recebido em ${new Date(p.at).toLocaleDateString('pt-BR')}.</p>
+
+      <button class="btn danger full" data-f="excluir">Excluir pagamento</button>`,
     acoes: [{
-      label: 'Excluir', classe: 'danger',
-      onClick: async ({ fechar }) => {
-        if (!await confirmar('Excluir esse pagamento?', 'Excluir')) return
-        await api(`/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
-        fechar(); toast('Excluído.'); render()
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const valor = numeroBR($('#pgValor', bg).value)
+        if (!valor) return toast('Informe o valor.', 'err')
+        btn.disabled = true
+        try {
+          await api(`/payments/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: { value: valor, card: pegaCartao() || null, note: $('#pgNota', bg).value.trim() },
+          })
+          fechar(); toast('Pagamento atualizado.'); render({ manterScroll: true })
+        } catch (err) { btn.disabled = false; toast(err.message, 'err') }
       },
     }],
   })
+
+  const mostrar = (v) => {
+    const ck = v ?? pegaCartao()
+    const c = S.cards.find((x) => x.key === ck)
+    $('#pgFatura', bg).innerHTML = c
+      ? `💳 Abate da fatura atual do <b>${esc(c.name)}</b>`
+      : '💰 Abate do saldo geral da pessoa, sem amarrar a um cartão'
+  }
+  const pegaCartao = grupoChips(bg, '#pgCartao', mostrar)
+  mostrar()
+
+  $('[data-f="excluir"]', bg).onclick = async () => {
+    if (!await confirmar('Excluir esse pagamento?', 'Excluir')) return
+    await api(`/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    fechar(); toast('Excluído.'); render({ manterScroll: true })
+  }
 }
 
 // ---------- formulários ----------

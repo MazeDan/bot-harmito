@@ -214,6 +214,58 @@ export async function addExpense({ person, value, card = null, note = '', at = n
   return created
 }
 
+/**
+ * Edita um lançamento. Trocar o cartão ou a data recalcula em qual fatura ele
+ * cai (usando o fechamento do cartão novo). Com `grupo`, aplica a todas as
+ * parcelas — mantendo a ordem delas nas competências seguintes.
+ */
+export async function updateExpense(expenseId, patch = {}, { grupo = true } = {}) {
+  const alvo = db.expenses.find((x) => x.id === expenseId)
+  if (!alvo) return null
+
+  const irmaos = grupo && alvo.parcela?.grupo
+    ? db.expenses.filter((x) => x.parcela?.grupo === alvo.parcela.grupo).sort((a, b) => a.parcela.n - b.parcela.n)
+    : [alvo]
+
+  const trocouCartao = patch.card !== undefined
+  const ck = trocouCartao ? (patch.card ? key(patch.card) : null) : alvo.card
+  const at = patch.at !== undefined && patch.at ? new Date(patch.at) : new Date(alvo.at)
+
+  if (patch.person !== undefined && patch.person) await upsertPerson(patch.person)
+  const pk = patch.person !== undefined && patch.person ? key(patch.person) : alvo.person
+
+  const base = ck ? competenciaFor(at, ck) : ym(at)
+
+  for (const e of irmaos) {
+    e.card = ck
+    e.person = pk
+    e.at = at.toISOString()
+    if (patch.note !== undefined) e.note = String(patch.note || '').trim()
+    // o valor é só do lançamento tocado — as outras parcelas seguem as suas
+    if (patch.value !== undefined && Number(patch.value) > 0 && e.id === alvo.id) e.value = r2(num(patch.value))
+    e.competencia = e.parcela ? addMonths(base, e.parcela.n - 1) : base
+  }
+
+  await save()
+  return irmaos
+}
+
+/** Edita um pagamento (valor, cartão a que ele se refere, observação) */
+export async function updatePayment(paymentId, patch = {}) {
+  const p = db.payments.find((x) => x.id === paymentId)
+  if (!p) return null
+  if (patch.card !== undefined) {
+    p.card = patch.card ? key(patch.card) : null
+    p.competencia = p.card ? (patch.competencia || competenciaAtual(p.card)) : null
+  } else if (patch.competencia !== undefined) {
+    p.competencia = patch.competencia || null
+  }
+  if (patch.value !== undefined && Number(patch.value) > 0) p.value = r2(num(patch.value))
+  if (patch.note !== undefined) p.note = String(patch.note || '').trim()
+  await save()
+  return p
+}
+
 export async function deleteExpense(expenseId, { grupo = false } = {}) {
   const e = db.expenses.find((x) => x.id === expenseId)
   if (!e) return false
