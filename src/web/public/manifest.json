@@ -1,0 +1,13 @@
+{
+  "name": "Painel Financeiro",
+  "short_name": "Financeiro",
+  "description": "Controle de cartões, faturas e cobrança",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

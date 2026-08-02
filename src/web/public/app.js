@@ -1,4 +1,6 @@
-/* Painel financeiro — vanilla JS, sem dependências externas. */
+/* Painel financeiro — vanilla JS, sem dependências.
+   Desenhado para o celular: navegação embaixo, bottom sheets, listas em vez
+   de tabelas e entrada rápida por toque. */
 
 let S = null            // estado vindo do servidor
 let TAB = 'resumo'
@@ -8,7 +10,6 @@ let TAB = 'resumo'
 const CHAVE = 'painel_token'
 let TOKEN = sessionStorage.getItem(CHAVE) || ''
 
-// Se veio um link antigo com ?t=, guarda e limpa a URL na hora
 const naQuery = new URLSearchParams(location.search).get('t')
 if (naQuery) {
   TOKEN = naQuery
@@ -18,11 +19,15 @@ if (naQuery) {
 
 // ---------- utilidades ----------
 
-const $ = (sel, el = document) => el.querySelector(sel)
+const $ = (sel, base = document) => base.querySelector(sel)
+const $$ = (sel, base = document) => [...base.querySelectorAll(sel)]
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const money = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const curto = (v) => { const n = Math.abs(Number(v) || 0); return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.', ',') + 'k' : String(Math.round(n)) }
+const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
+const vibrar = (ms = 8) => navigator.vibrate?.(ms)
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const mesBR = (ym) => { const [y, m] = String(ym).split('-'); return `${MESES[+m - 1] ?? m}/${String(y).slice(2)}` }
@@ -30,6 +35,8 @@ const mesLongo = (ym) => {
   const nomes = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
   const [y, m] = String(ym).split('-'); return `${nomes[+m - 1] ?? m} de ${y}`
 }
+const numeroBR = (v) => Number(String(v ?? '').replace(/\./g, '').replace(',', '.')) || 0
+const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 async function api(rota, opts = {}) {
   const headers = { 'x-token': TOKEN }
@@ -46,114 +53,111 @@ async function api(rota, opts = {}) {
   return data
 }
 
-function telaLogin(erro = '') {
-  document.querySelector('.app').style.display = 'none'
-  const antigo = document.getElementById('login')
-  if (antigo) antigo.remove()
-  const tela = el(`<div id="login" style="min-height:100vh;display:grid;place-items:center;padding:20px">
-    <div class="card" style="width:min(380px,100%);text-align:center">
-      <div style="font-size:38px;margin-bottom:6px">💳</div>
-      <h3 style="font-size:17px;margin-bottom:4px">Painel Financeiro</h3>
-      <p class="muted" style="font-size:13px;margin-bottom:18px">Entre com a senha do painel</p>
-      ${erro ? `<div class="banner warn" style="text-align:left">⚠️ ${esc(erro)}</div>` : ''}
-      <div class="field"><input id="loginSenha" type="password" placeholder="senha" autocomplete="current-password"></div>
-      <button class="btn" id="loginBtn" style="width:100%">Entrar</button>
-      <p class="muted" style="font-size:11.5px;margin-top:14px">A senha aparece no log do bot ao iniciar, ou no comando <code>/painel</code>.</p>
-    </div>
-  </div>`)
-  document.body.append(tela)
-
-  const entrar = async () => {
-    const v = document.getElementById('loginSenha').value.trim()
-    if (!v) return
-    TOKEN = v
-    try {
-      S = await api('/state')
-      sessionStorage.setItem(CHAVE, TOKEN)
-      tela.remove()
-      document.querySelector('.app').style.display = ''
-      render()
-    } catch { /* api já reexibe a tela com o erro */ }
-  }
-  document.getElementById('loginBtn').onclick = entrar
-  document.getElementById('loginSenha').onkeydown = (e) => { if (e.key === 'Enter') entrar() }
-  document.getElementById('loginSenha').focus()
-}
-
 function toast(msg, tipo = 'ok') {
+  $$('.toast').forEach((t) => t.remove())
   const t = el(`<div class="toast ${tipo}">${esc(msg)}</div>`)
   $('#toastHost').append(t)
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300) }, 3600)
+  vibrar(tipo === 'err' ? 30 : 8)
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300) }, 3200)
 }
 
-function modal({ titulo, corpo, acoes = [] }) {
-  const bg = el(`<div class="modal-bg"><div class="modal">
-    <header><h2>${esc(titulo)}</h2><button class="x">&times;</button></header>
+// ---------- bottom sheet ----------
+
+function sheet({ titulo, corpo, acoes = [], aoAbrir }) {
+  const bg = el(`<div class="sheet-bg"><div class="sheet">
+    <div class="grabber"></div>
+    <header><h2>${esc(titulo)}</h2><button class="x" aria-label="Fechar">&times;</button></header>
     <div class="body"></div>
-    <footer></footer>
   </div></div>`)
+  const caixa = $('.sheet', bg)
   $('.body', bg).innerHTML = corpo
-  const foot = $('footer', bg)
-  const fechar = () => bg.remove()
-  for (const a of acoes) {
-    const b = el(`<button class="btn ${a.classe || ''}">${esc(a.label)}</button>`)
-    b.onclick = () => a.onClick({ bg, fechar, btn: b })
-    foot.append(b)
+
+  const fechar = () => { bg.style.opacity = '0'; bg.style.transition = 'opacity .18s'; setTimeout(() => bg.remove(), 180) }
+
+  if (acoes.length) {
+    const foot = el('<footer></footer>')
+    for (const a of acoes) {
+      const b = el(`<button class="btn ${a.classe || ''}">${esc(a.label)}</button>`)
+      b.onclick = () => a.onClick({ bg, fechar, btn: b })
+      foot.append(b)
+    }
+    caixa.append(foot)
   }
-  const cancelar = el('<button class="btn ghost">Fechar</button>')
-  cancelar.onclick = fechar
-  foot.append(cancelar)
+
   $('.x', bg).onclick = fechar
   bg.onclick = (e) => { if (e.target === bg) fechar() }
-  $('#modalHost').append(bg)
+
+  // arrastar o grabber para baixo fecha
+  let y0 = null
+  const cab = $('header', bg)
+  const inicio = (e) => { y0 = e.touches[0].clientY }
+  const move = (e) => {
+    if (y0 == null) return
+    const dy = e.touches[0].clientY - y0
+    if (dy > 0) caixa.style.transform = `translateY(${dy}px)`
+  }
+  const fim = () => {
+    const dy = parseFloat((caixa.style.transform.match(/([\d.]+)px/) || [0, 0])[1])
+    caixa.style.transform = ''
+    if (dy > 110) fechar()
+    y0 = null
+  }
+  for (const alvo of [$('.grabber', bg), cab]) {
+    alvo.addEventListener('touchstart', inicio, { passive: true })
+    alvo.addEventListener('touchmove', move, { passive: true })
+    alvo.addEventListener('touchend', fim)
+  }
+
+  $('#sheetHost').append(bg)
+  aoAbrir?.({ bg, fechar })
   return { bg, fechar }
 }
 
-const confirmar = (texto) => new Promise((resolve) => {
-  const { fechar } = modal({
-    titulo: 'Confirmar',
-    corpo: `<p style="font-size:14px;line-height:1.6">${esc(texto)}</p>`,
-    acoes: [{ label: 'Sim, confirmar', classe: 'danger', onClick: ({ fechar }) => { fechar(); resolve(true) } }],
+const confirmar = (texto, rotulo = 'Confirmar') => new Promise((resolve) => {
+  let decidido = false
+  const { bg, fechar } = sheet({
+    titulo: 'Tem certeza?',
+    corpo: `<p style="font-size:15px;line-height:1.6;padding:6px 0 10px">${esc(texto)}</p>`,
+    acoes: [{ label: rotulo, classe: 'danger', onClick: ({ fechar }) => { decidido = true; fechar(); resolve(true) } }],
   })
-  const bg = $('#modalHost .modal-bg:last-child')
-  bg.addEventListener('click', (e) => { if (e.target === bg) resolve(false) })
-  $('.x', bg).addEventListener('click', () => resolve(false))
+  const obs = new MutationObserver(() => { if (!bg.isConnected) { obs.disconnect(); if (!decidido) resolve(false) } })
+  obs.observe($('#sheetHost'), { childList: true })
   void fechar
 })
 
-// ---------- gráficos SVG ----------
+// ---------- gráficos ----------
 
-function barChart(dados, { altura = 170 } = {}) {
+function barChart(dados, { altura = 150, larguraBarra = 42 } = {}) {
   if (!dados.length) return '<div class="empty">Sem dados ainda.</div>'
   const max = Math.max(...dados.map((d) => d.valor), 1)
-  const W = 100, gap = 1.4
-  const largura = (W - gap * (dados.length - 1)) / dados.length
+  const W = Math.max(dados.length * larguraBarra, 260)
+  const H = 100, base = 76, gap = 7
+  const bw = (W - gap * dados.length) / dados.length
 
   const barras = dados.map((d, i) => {
-    const h = (d.valor / max) * 74
-    const x = i * (largura + gap)
+    const h = (d.valor / max) * 62
+    const x = i * (bw + gap) + gap / 2
     return `<g>
-      <rect class="bar" x="${x}" y="${80 - h}" width="${largura}" height="${Math.max(h, .6)}" rx="0.8">
-        <title>${esc(d.rotulo)}: ${money(d.valor)}</title>
-      </rect>
-      <text x="${x + largura / 2}" y="89" text-anchor="middle" style="font-size:3.2px">${esc(d.rotulo)}</text>
-      ${d.valor > 0 ? `<text x="${x + largura / 2}" y="${Math.max(80 - h - 2, 5)}" text-anchor="middle" style="font-size:3px;fill:var(--txt-2)">${Math.round(d.valor)}</text>` : ''}
+      <rect x="${x}" y="${base - h}" width="${bw}" height="${Math.max(h, 2)}" rx="4" fill="url(#gr)"/>
+      <text x="${x + bw / 2}" y="${base + 11}" text-anchor="middle" font-size="9.5">${esc(d.rotulo)}</text>
+      ${d.valor > 0 ? `<text x="${x + bw / 2}" y="${Math.max(base - h - 4, 8)}" text-anchor="middle" font-size="9" fill="var(--txt-2)" font-weight="600">${curto(d.valor)}</text>` : ''}
     </g>`
   }).join('')
 
-  return `<svg viewBox="0 0 100 94" preserveAspectRatio="none" style="width:100%;height:${altura}px;display:block">
+  return `<div class="chart-scroll"><svg viewBox="0 0 ${W} ${H}" style="width:${W < 320 ? '100%' : W + 'px'};min-width:100%;height:${altura}px;display:block">
     <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#a78bfa" stop-opacity=".55"/>
+      <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#a78bfa" stop-opacity=".5"/>
     </linearGradient></defs>
-    ${[0, 25, 50, 75].map((p) => `<line class="grid-line" x1="0" x2="100" y1="${80 - p * .74}" y2="${80 - p * .74}" vector-effect="non-scaling-stroke"/>`).join('')}
+    ${[0, 20, 40, 60].map((p) => `<line class="grid-line" x1="0" x2="${W}" y1="${base - p}" y2="${base - p}" vector-effect="non-scaling-stroke"/>`).join('')}
     ${barras}
-  </svg>`
+  </svg></div>`
 }
 
-function donut(fatias, { tamanho = 168 } = {}) {
+const CORES = ['#7c5cff', '#22c3a6', '#ffb020', '#ff5a95', '#4d9dff', '#a78bfa', '#ff8a3d', '#2fd08a']
+
+function donut(fatias) {
   const total = fatias.reduce((s, f) => s + f.valor, 0)
   if (!total) return '<div class="empty">Sem gastos ainda.</div>'
-  const cores = ['#7c5cff', '#22c3a6', '#ffb020', '#ff5a95', '#4d9dff', '#a78bfa', '#ff8a3d', '#2fd08a']
   const R = 15.9155, C = 2 * Math.PI * R
   let acc = 0
 
@@ -162,105 +166,105 @@ function donut(fatias, { tamanho = 168 } = {}) {
     const dash = `${(frac * C).toFixed(3)} ${(C - frac * C).toFixed(3)}`
     const off = (C * 0.25 - acc * C).toFixed(3)
     acc += frac
-    return `<circle cx="21" cy="21" r="${R}" fill="none" stroke="${cores[i % cores.length]}" stroke-width="5.2"
-      stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 21 21)">
-      <title>${esc(f.rotulo)}: ${money(f.valor)} (${Math.round(frac * 100)}%)</title></circle>`
+    return `<circle cx="21" cy="21" r="${R}" fill="none" stroke="${CORES[i % CORES.length]}" stroke-width="5.4"
+      stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 21 21)"/>`
   }).join('')
 
   const legenda = fatias.map((f, i) => `
-    <div class="list-line">
-      <span class="who"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${cores[i % cores.length]};margin-right:8px"></span>${esc(f.rotulo)}</span>
-      <b class="num">${money(f.valor)}</b>
+    <div class="row-item" style="cursor:default;min-height:44px">
+      <span style="width:11px;height:11px;border-radius:4px;background:${CORES[i % CORES.length]};flex:0 0 auto"></span>
+      <span class="grow t1" style="font-weight:500;font-size:14px">${esc(f.rotulo)}</span>
+      <b class="v">${money(f.valor)}</b>
     </div>`).join('')
 
-  return `<div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
-    <svg viewBox="0 0 42 42" style="width:${tamanho}px;height:${tamanho}px;flex:0 0 auto">
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <svg viewBox="0 0 42 42" style="width:150px;height:150px">
       ${arcos}
-      <text x="21" y="20.4" text-anchor="middle" style="font-size:2.6px;fill:var(--txt-3)">total</text>
-      <text x="21" y="24.4" text-anchor="middle" style="font-size:4.1px;fill:var(--txt);font-weight:650">${money(total).replace('R$ ', '')}</text>
+      <text x="21" y="20.2" text-anchor="middle" font-size="2.7">total</text>
+      <text x="21" y="24.6" text-anchor="middle" font-size="4.3" fill="var(--txt)" font-weight="700">${money(total).replace('R$ ', '')}</text>
     </svg>
-    <div style="flex:1 1 190px;min-width:180px">${legenda}</div>
+    <div class="rows" style="width:100%">${legenda}</div>
   </div>`
 }
 
 // ---------- render ----------
 
+const TITULOS = {
+  resumo: ['Resumo', () => `Fatura de ${mesLongo(S.resumo.competencia)}`],
+  cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
+  pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => p.saldo > 0.009).length} devendo`],
+  historico: ['Histórico', () => `${S.expenses.length} lançamentos`],
+  mais: ['Mais', () => 'extratos, lote e configurações'],
+}
+
 function render() {
   if (!S) return
-  $('#statusBot').innerHTML = `<span class="dot ${S.online ? 'on' : 'off'}"></span>${S.online ? 'WhatsApp conectado' : 'WhatsApp offline'}`
-  $('#statusCobranca').textContent = S.cobranca.ativo
-    ? `🔔 Cobrança ${S.cobranca.dryRun ? 'em simulação' : 'ativa'} · ${S.cobranca.horario}`
-    : '🔕 Cobrança desligada'
-
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('on', b.dataset.tab === TAB))
-  $('#main').innerHTML = ({ resumo, cartoes, pessoas, lancar, historico, extratos, config: cfgTab })[TAB]()
+  const [titulo, sub] = TITULOS[TAB]
+  $('#tbTitulo').innerHTML = `${titulo}<span class="sub">${esc(sub())}</span>`
+  $('#tbStatus').innerHTML = S.online ? '🟢 online' : '🔴 offline'
+  $$('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === TAB))
+  $('#main').innerHTML = ({ resumo, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   window.scrollTo(0, 0)
 }
 
-function head(titulo, sub, botoes = '') {
-  return `<div class="page-head"><div><h1>${titulo}</h1><p>${sub}</p></div><div class="row shrink" style="gap:8px">${botoes}</div></div>`
-}
+const linha = ({ av, t1, t2, v, sub, acao = '', dados = '', cor = '' }) => `
+  <button class="row-item" ${acao ? `data-acao="${acao}"` : ''} ${dados}>
+    ${av ? `<span class="avatar">${esc(av)}</span>` : ''}
+    <span class="grow"><span class="t1">${t1}</span>${t2 ? `<span class="t2">${t2}</span>` : ''}</span>
+    ${v ? `<span class="v" ${cor ? `style="color:${cor}"` : ''}>${v}${sub ? `<small>${sub}</small>` : ''}</span>` : ''}
+    <span class="chev">›</span>
+  </button>`
 
-// --- aba: resumo ---
+// --- Resumo ---
 function resumo() {
   const r = S.resumo
   const prox = r.proximoVencimento
   const dias = prox?.fatura?.diasParaVencer
-  const classeProx = dias == null ? '' : dias < 0 ? 'danger' : dias <= 3 ? 'warn' : 'ok'
-
-  const evo = S.evolucao.map((e) => ({ rotulo: mesBR(e.competencia), valor: e.total }))
-  const porCartao = S.cards.map((c) => ({ rotulo: c.name, valor: c.fatura?.total || 0 })).filter((f) => f.valor > 0)
-  const porPessoa = S.pessoas.filter((p) => p.saldo > 0.009).map((p) => ({ rotulo: p.name, valor: p.saldo }))
-
+  const classe = dias == null ? '' : dias < 0 ? 'danger' : dias <= 3 ? 'warn' : 'ok'
   const devedores = S.pessoas.filter((p) => Math.abs(p.saldo) > 0.009)
 
-  return head('Resumo', `Fatura de ${mesLongo(r.competencia)}`, `<button class="btn" data-acao="novo-gasto">+ Lançar gasto</button>`) + `
-    ${!S.cards.length ? `<div class="banner info">👋 Comece cadastrando um cartão na aba <b>Cartões</b> — sem o dia de fechamento eu não sei em que fatura jogar cada compra.</div>` : ''}
-    ${S.cobranca.dryRun && S.cobranca.ativo ? `<div class="banner warn">🧪 Cobrança em <b>modo simulação</b>: nada é enviado de verdade. Veja como ligar na aba Configurações.</div>` : ''}
+  return `
+    ${!S.cards.length ? '<div class="banner info">👋 Comece cadastrando um cartão na aba <b>Cartões</b> — com o dia de fechamento eu jogo cada compra na fatura certa sozinho.</div>' : ''}
+    ${S.cobranca.dryRun && S.cobranca.ativo ? '<div class="banner warn">🧪 Cobrança em <b>modo simulação</b> — nada é enviado de verdade.</div>' : ''}
 
-    <div class="grid g4">
-      <div class="kpi"><div class="lbl">Faturas abertas</div><div class="val">${money(r.totalFaturas)}</div><div class="sub">${S.cards.length} cartão(ões)</div></div>
-      <div class="kpi ok"><div class="lbl">A receber</div><div class="val">${money(r.aReceber)}</div><div class="sub">${devedores.length} pessoa(s) devendo</div></div>
-      <div class="kpi warn"><div class="lbl">Em aberto nas faturas</div><div class="val">${money(r.emAberto)}</div><div class="sub">já descontando o que recebi</div></div>
-      <div class="kpi ${classeProx}"><div class="lbl">Próximo vencimento</div><div class="val">${prox ? (dias > 0 ? dias + 'd' : dias === 0 ? 'hoje' : 'vencida') : '—'}</div><div class="sub">${prox ? esc(prox.name) + ' · ' + money(prox.fatura.aberto) : 'nenhum cartão com vencimento'}</div></div>
+    <div class="grid g2">
+      <div class="kpi"><div class="lbl">Faturas</div><div class="val">${money(r.totalFaturas)}</div><div class="sub">${S.cards.length} cartão(ões)</div></div>
+      <div class="kpi ok"><div class="lbl">A receber</div><div class="val">${money(r.aReceber)}</div><div class="sub">${devedores.length} pessoa(s)</div></div>
+      <div class="kpi warn"><div class="lbl">Em aberto</div><div class="val">${money(r.emAberto)}</div><div class="sub">já tirando o que recebi</div></div>
+      <div class="kpi ${classe}"><div class="lbl">Vence em</div><div class="val">${prox ? (dias > 0 ? dias + 'd' : dias === 0 ? 'hoje' : 'venceu') : '—'}</div><div class="sub">${prox ? esc(prox.name) : 'sem vencimento'}</div></div>
     </div>
 
-    <div class="grid g2" style="margin-top:16px">
-      <div class="card"><h3>Evolução <small>últimos 12 meses</small></h3>${barChart(evo)}</div>
-      <div class="card"><h3>Fatura atual por cartão</h3>${donut(porCartao)}</div>
-    </div>
+    ${devedores.length ? `<div class="card">
+      <h3>Quem te deve <span class="push"></span></h3>
+      <div class="rows">${devedores.map((p) => linha({
+        av: iniciais(p.name), t1: esc(p.name),
+        t2: p.phone ? '📱 ' + esc(p.phone) : '<span style="color:var(--warn)">sem telefone</span>',
+        v: money(p.saldo), sub: 'toque p/ receber',
+        cor: p.saldo > 0 ? 'var(--warn)' : 'var(--ok)',
+        acao: 'ver-pessoa', dados: `data-p="${esc(p.key)}"`,
+      })).join('')}</div>
+    </div>` : '<div class="card"><div class="empty"><span class="big">🎉</span>Ninguém te deve nada agora.</div></div>'}
 
-    <div class="grid g2" style="margin-top:16px">
-      <div class="card">
-        <h3>Quem te deve</h3>
-        ${devedores.length ? `<table><tbody>${devedores.map((p) => `
-          <tr>
-            <td><b>${esc(p.name)}</b><br><span class="muted mono">${p.phone ? esc(p.phone) : 'sem telefone'}</span></td>
-            <td class="num" style="color:${p.saldo > 0 ? 'var(--warn)' : 'var(--ok)'}">${money(p.saldo)}</td>
-            <td class="right shrink"><button class="btn ghost sm" data-acao="receber" data-p="${esc(p.key)}">Recebi</button></td>
-          </tr>`).join('')}</tbody></table>` : '<div class="empty"><span class="big">🎉</span>Ninguém te deve nada.</div>'}
-      </div>
-      <div class="card">
-        <h3>Divisão por pessoa <small>saldo em aberto</small></h3>
-        ${donut(porPessoa)}
-      </div>
-    </div>
+    <div class="card"><h3>Evolução <small>12 meses</small></h3>
+      ${barChart(S.evolucao.map((e) => ({ rotulo: mesBR(e.competencia), valor: e.total })))}</div>
 
-    ${S.futuro.length ? `<div class="card"><h3>Parcelas já comprometidas <small>meses à frente</small></h3>
-      ${barChart(S.futuro.map((f) => ({ rotulo: mesBR(f.competencia), valor: f.total })), { altura: 140 })}</div>` : ''}
+    <div class="card"><h3>Fatura por cartão</h3>
+      ${donut(S.cards.map((c) => ({ rotulo: c.name, valor: c.fatura?.total || 0 })).filter((f) => f.valor > 0))}</div>
+
+    ${S.futuro.length ? `<div class="card"><h3>Parcelas a vencer <small>meses à frente</small></h3>
+      ${barChart(S.futuro.map((f) => ({ rotulo: mesBR(f.competencia), valor: f.total })), { altura: 130 })}</div>` : ''}
   `
 }
 
-// --- aba: cartões ---
+// --- Cartões ---
 function cartoes() {
   if (!S.cards.length) {
-    return head('Cartões', 'Cadastre seus cartões e o bot calcula sozinho em qual fatura cai cada compra',
-      `<button class="btn" data-acao="novo-cartao">+ Novo cartão</button>`) +
-      `<div class="card"><div class="empty"><span class="big">💳</span>Nenhum cartão cadastrado ainda.</div></div>`
+    return `<div class="card"><div class="empty"><span class="big">💳</span>Nenhum cartão ainda.</div>
+      <button class="btn full" data-acao="novo-cartao">+ Cadastrar cartão</button></div>`
   }
 
-  const tiles = S.cards.map((c) => {
+  return S.cards.map((c) => {
     const f = c.fatura
     const d = f.diasParaVencer
     const tag = d == null ? '<span class="tag">sem vencimento</span>'
@@ -268,446 +272,583 @@ function cartoes() {
       : d === 0 ? '<span class="tag danger">vence hoje</span>'
       : d <= 3 ? `<span class="tag warn">vence em ${d}d</span>`
       : `<span class="tag ok">vence em ${d}d</span>`
-
     const uso = c.limite ? Math.min(100, Math.round((f.total / c.limite) * 100)) : null
 
-    return `<div class="card-tile">
-      <div class="top">
-        <div>
-          <div class="nome"><span class="chip-cor" style="background:${esc(c.cor || '#7c5cff')}"></span>${esc(c.name)}</div>
-          <div class="muted" style="font-size:12px;margin-top:4px">
-            fecha dia ${c.fechamento ?? '—'} · vence dia ${c.vencimento ?? '—'}
-          </div>
-        </div>
-        ${tag}
-      </div>
-      <div class="body">
-        <div style="display:flex;justify-content:space-between;align-items:flex-end">
-          <div>
-            <div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.5px">Fatura ${mesBR(f.competencia)}</div>
-            <div style="font-size:25px;font-weight:660;letter-spacing:-.7px;margin-top:2px">${money(f.total)}</div>
-          </div>
-          ${f.pago > 0 ? `<div class="right"><div class="muted" style="font-size:11.5px">recebi</div><b style="color:var(--ok)">${money(f.pago)}</b></div>` : ''}
-        </div>
-        ${uso != null ? `<div class="bar-track"><div class="bar-fill ${uso > 90 ? 'danger' : uso > 70 ? 'warn' : ''}" style="width:${uso}%"></div></div>
-          <div class="muted" style="font-size:11.5px;margin-top:5px">${uso}% do limite de ${money(c.limite)}</div>` : ''}
+    return `<div class="card">
+      <h3>
+        <span style="width:10px;height:10px;border-radius:3px;background:${esc(c.cor || '#7c5cff')}"></span>
+        ${esc(c.name)}
+        <span class="push">${tag}</span>
+      </h3>
 
-        <div style="margin-top:14px">
-          ${f.pessoas.length ? f.pessoas.map((p) => `<div class="list-line">
-            <span class="who">${esc(p.name)}${p.pago ? ` <span class="tag ok">pagou ${money(p.pago)}</span>` : ''}</span>
-            <b class="num">${money(p.aberto)}</b></div>`).join('')
-            : '<div class="muted" style="font-size:13px;padding:6px 0">Nenhum lançamento nesta fatura.</div>'}
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px">
+        <div>
+          <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Fatura ${mesBR(f.competencia)}</div>
+          <div style="font-size:27px;font-weight:690;letter-spacing:-1px;margin-top:2px">${money(f.total)}</div>
+          <div class="muted" style="font-size:12px;margin-top:3px">fecha dia ${c.fechamento ?? '—'} · vence dia ${c.vencimento ?? '—'}</div>
         </div>
+        ${f.pago > 0 ? `<div class="right"><div class="muted" style="font-size:11px">recebi</div><b style="color:var(--ok)">${money(f.pago)}</b></div>` : ''}
       </div>
-      <div class="foot">
-        <button class="btn sm" data-acao="cobrar" data-card="${esc(c.key)}">📤 Cobrar</button>
-        <button class="btn ghost sm" data-acao="ver-fatura" data-card="${esc(c.key)}">🧾 Faturas</button>
-        <button class="btn ghost sm" data-acao="editar-cartao" data-card="${esc(c.key)}">✏️ Editar</button>
-        <button class="btn danger sm" data-acao="del-cartao" data-card="${esc(c.key)}">Excluir</button>
+
+      ${uso != null ? `<div class="bar-track"><div class="bar-fill ${uso > 90 ? 'danger' : uso > 70 ? 'warn' : ''}" style="width:${uso}%"></div></div>
+        <div class="muted" style="font-size:11.5px;margin-top:5px">${uso}% de ${money(c.limite)}</div>` : ''}
+
+      <div class="rows" style="margin-top:10px">
+        ${f.pessoas.length ? f.pessoas.map((p) => linha({
+          av: iniciais(p.name), t1: esc(p.name),
+          t2: p.pago ? `pagou ${money(p.pago)}` : `${p.items.length} lançamento(s)`,
+          v: money(p.aberto), acao: 'ver-pessoa', dados: `data-p="${esc(p.person)}"`,
+        })).join('') : '<div class="muted" style="font-size:13.5px;padding:8px 0">Nenhum lançamento nesta fatura.</div>'}
       </div>
+
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" data-acao="cobrar" data-card="${esc(c.key)}">📤 Cobrar</button>
+        <button class="btn ghost" data-acao="ver-fatura" data-card="${esc(c.key)}">🧾 Faturas</button>
+        <button class="btn ghost" data-acao="editar-cartao" data-card="${esc(c.key)}" style="flex:0 0 52px">✏️</button>
+      </div>
+    </div>`
+  }).join('') + `<button class="btn ghost full" style="margin-top:14px" data-acao="novo-cartao">+ Novo cartão</button>`
+}
+
+// --- Pessoas ---
+function pessoas() {
+  if (!S.pessoas.length) {
+    return `<div class="card"><div class="empty"><span class="big">👥</span>Ninguém cadastrado ainda.<br>As pessoas aparecem sozinhas quando você lança um gasto.</div>
+      <button class="btn full" data-acao="nova-pessoa">+ Adicionar pessoa</button></div>`
+  }
+  const semFone = S.pessoas.filter((p) => !p.phone).length
+  return `
+    ${semFone ? `<div class="banner warn">📱 ${semFone} pessoa(s) sem telefone — não dá para cobrar automaticamente. Toque para adicionar.</div>` : ''}
+    <div class="card"><div class="rows">
+      ${S.pessoas.map((p) => linha({
+        av: iniciais(p.name), t1: esc(p.name),
+        t2: p.phone ? '📱 ' + esc(p.phone) : '<span style="color:var(--warn)">sem telefone</span>',
+        v: money(p.saldo), sub: p.totalPaid ? `pagou ${money(p.totalPaid)}` : '',
+        cor: p.saldo > 0.009 ? 'var(--warn)' : 'var(--txt-3)',
+        acao: 'ver-pessoa', dados: `data-p="${esc(p.key)}"`,
+      })).join('')}
+    </div></div>
+    <button class="btn ghost full" style="margin-top:14px" data-acao="nova-pessoa">+ Nova pessoa</button>`
+}
+
+// --- Histórico ---
+function historico() {
+  const nomes = Object.fromEntries(S.pessoas.map((p) => [p.key, p.name]))
+  const cartoes_ = Object.fromEntries(S.cards.map((c) => [c.key, c.name]))
+  const gastos = S.expenses.slice(0, 200)
+
+  // agrupa por dia, que é como a gente lembra dos gastos
+  const grupos = new Map()
+  for (const e of gastos) {
+    const dia = e.at.slice(0, 10)
+    if (!grupos.has(dia)) grupos.set(dia, [])
+    grupos.get(dia).push(e)
+  }
+
+  const blocos = [...grupos.entries()].map(([dia, itens]) => {
+    const total = itens.reduce((s, i) => s + i.value, 0)
+    const d = new Date(dia + 'T12:00:00')
+    const rotulo = dia === hojeISO() ? 'Hoje' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
+    return `<div class="card">
+      <h3>${esc(rotulo)} <span class="push muted" style="font-weight:600;font-size:13px">${money(total)}</span></h3>
+      <div class="rows">${itens.map((e) => linha({
+        av: iniciais(nomes[e.person] || e.person), t1: esc(nomes[e.person] || e.person),
+        t2: [e.note, e.card ? cartoes_[e.card] : null, e.parcela ? `${e.parcela.n}/${e.parcela.total}` : null, `fatura ${mesBR(e.competencia)}`].filter(Boolean).map(esc).join(' · '),
+        v: money(e.value), acao: 'ver-gasto', dados: `data-id="${esc(e.id)}"`,
+      })).join('')}</div>
     </div>`
   }).join('')
 
-  return head('Cartões', 'Fatura atual, limite e vencimento de cada cartão',
-    `<button class="btn" data-acao="novo-cartao">+ Novo cartão</button>`) +
-    `<div class="grid g2">${tiles}</div>`
+  const pagamentos = S.payments.slice(0, 40)
+  return (blocos || '<div class="card"><div class="empty"><span class="big">🧾</span>Nenhum gasto lançado ainda.</div></div>') +
+    (pagamentos.length ? `<div class="card"><h3>Pagamentos recebidos</h3><div class="rows">
+      ${pagamentos.map((p) => linha({
+        av: '💵', t1: esc(nomes[p.person] || p.person),
+        t2: `${dataBR(p.at)}${p.card ? ' · ' + esc(cartoes_[p.card] || p.card) : ''}${p.note ? ' · ' + esc(p.note) : ''}`,
+        v: money(p.value), cor: 'var(--ok)', acao: 'ver-pagamento', dados: `data-id="${esc(p.id)}"`,
+      })).join('')}
+    </div></div>` : '')
 }
 
-// --- aba: pessoas ---
-function pessoas() {
-  const linhas = S.pessoas.map((p) => `<tr>
-    <td><b>${esc(p.name)}</b></td>
-    <td class="mono muted">${p.phone ? esc(p.phone) : '<span class="tag warn">sem telefone</span>'}</td>
-    <td class="num">${money(p.totalItems)}</td>
-    <td class="num" style="color:var(--ok)">${money(p.totalPaid)}</td>
-    <td class="num" style="color:${p.saldo > 0.009 ? 'var(--warn)' : 'var(--txt-3)'}"><b>${money(p.saldo)}</b></td>
-    <td class="right" style="white-space:nowrap">
-      <button class="btn ghost sm" data-acao="receber" data-p="${esc(p.key)}">Recebi</button>
-      <button class="btn ghost sm" data-acao="editar-pessoa" data-p="${esc(p.key)}">✏️</button>
-      <button class="btn danger sm" data-acao="del-pessoa" data-p="${esc(p.key)}">🗑</button>
-    </td></tr>`).join('')
-
-  return head('Pessoas', 'Quem comprou nos seus cartões e quanto deve',
-    `<button class="btn" data-acao="nova-pessoa">+ Nova pessoa</button>`) + `
-    <div class="card">
-      ${S.pessoas.length ? `<table>
-        <thead><tr><th>Nome</th><th>Telefone</th><th class="num">Lançado</th><th class="num">Pagou</th><th class="num">Saldo</th><th></th></tr></thead>
-        <tbody>${linhas}</tbody></table>`
-        : '<div class="empty"><span class="big">👥</span>Nenhuma pessoa ainda. Elas aparecem sozinhas quando você lança um gasto.</div>'}
-    </div>
-    <div class="banner info" style="margin-top:16px">📱 Só consigo cobrar automaticamente quem tem telefone vinculado (com DDD).</div>`
-}
-
-// --- aba: lançar ---
-function lancar() {
-  const opcoesCartao = S.cards.map((c) => `<option value="${esc(c.key)}">${esc(c.name)}</option>`).join('')
-  return head('Lançar', 'Um por um, ou em lote colando várias linhas de uma vez') + `
-    <div class="grid g2">
-      <div class="card">
-        <h3>Lançamento único</h3>
-        <div class="row">
-          <div class="field" style="flex:2 1 160px"><label>Pessoa</label><input id="uPessoa" placeholder="danilo" list="listaPessoas"></div>
-          <div class="field"><label>Valor total</label><input id="uValor" placeholder="0,00" inputmode="decimal"></div>
-        </div>
-        <div class="row">
-          <div class="field"><label>Cartão</label><select id="uCartao"><option value="">— sem cartão —</option>${opcoesCartao}</select></div>
-          <div class="field" style="flex:0 1 100px"><label>Parcelas</label><input id="uParcelas" type="number" min="1" max="60" value="1"></div>
-          <div class="field" style="flex:0 1 140px"><label>Data</label><input id="uData" type="date"></div>
-        </div>
-        <div class="field"><label>Observação</label><input id="uNota" placeholder="lanche, uber, mercado…"></div>
-        <button class="btn" data-acao="salvar-unico">Lançar</button>
-        <datalist id="listaPessoas">${S.pessoas.map((p) => `<option value="${esc(p.name)}">`).join('')}</datalist>
-      </div>
-
-      <div class="card">
-        <h3>Em lote <small>uma linha por gasto</small></h3>
-        <div class="field">
-          <label>Cartão padrão do lote</label>
-          <select id="lCartao"><option value="">— sem cartão —</option>${opcoesCartao}</select>
-        </div>
-        <div class="field">
-          <label>Linhas</label>
-          <textarea id="lTexto" rows="9" placeholder="22 danilo lanche
-35,90 maria uber
-300 joao 3x tenis
-18 ana #inter 12/07"></textarea>
-        </div>
-        <div class="muted" style="font-size:12px;margin-bottom:12px">
-          Ordem livre: <b>valor</b> · <b>pessoa</b> · <code>#cartao</code> · <code>3x</code> (parcelas) · <code>12/07</code> (data) · resto vira observação.
-        </div>
-        <button class="btn" data-acao="preview-lote">Conferir lote</button>
-      </div>
-    </div>`
-}
-
-// --- aba: histórico ---
-function historico() {
-  const gastos = S.expenses.slice(0, 300)
-  const nomes = Object.fromEntries(S.pessoas.map((p) => [p.key, p.name]))
-  const cartoes = Object.fromEntries(S.cards.map((c) => [c.key, c.name]))
-
-  const linhasGasto = gastos.map((e) => `<tr>
-    <td class="mono muted">${dataBR(e.at)}</td>
-    <td><b>${esc(nomes[e.person] || e.person)}</b>${e.note ? `<br><span class="muted" style="font-size:12px">${esc(e.note)}</span>` : ''}</td>
-    <td>${e.card ? `<span class="tag accent">${esc(cartoes[e.card] || e.card)}</span>` : '<span class="tag">sem cartão</span>'}</td>
-    <td class="mono muted">${mesBR(e.competencia)}</td>
-    <td>${e.parcela ? `<span class="tag">${e.parcela.n}/${e.parcela.total}</span>` : ''}</td>
-    <td class="num">${money(e.value)}</td>
-    <td class="right"><button class="btn danger sm" data-acao="del-gasto" data-id="${esc(e.id)}" ${e.parcela ? 'data-grupo="1"' : ''}>🗑</button></td>
-  </tr>`).join('')
-
-  const linhasPag = S.payments.slice(0, 100).map((p) => `<tr>
-    <td class="mono muted">${dataBR(p.at)}</td>
-    <td><b>${esc(nomes[p.person] || p.person)}</b></td>
-    <td>${p.card ? `<span class="tag accent">${esc(cartoes[p.card] || p.card)}</span>` : ''}</td>
-    <td class="num" style="color:var(--ok)">${money(p.value)}</td>
-    <td class="right"><button class="btn danger sm" data-acao="del-pagamento" data-id="${esc(p.id)}">🗑</button></td>
-  </tr>`).join('')
-
-  return head('Histórico', 'Todos os lançamentos e pagamentos registrados') + `
-    <div class="card">
-      <h3>Gastos <small>${S.expenses.length} no total${S.expenses.length > 300 ? ' — mostrando os 300 mais recentes' : ''}</small></h3>
-      ${gastos.length ? `<table><thead><tr><th>Data</th><th>Pessoa</th><th>Cartão</th><th>Fatura</th><th>Parcela</th><th class="num">Valor</th><th></th></tr></thead><tbody>${linhasGasto}</tbody></table>`
-        : '<div class="empty"><span class="big">🧾</span>Nenhum gasto lançado ainda.</div>'}
-    </div>
-    <div class="card">
-      <h3>Pagamentos recebidos</h3>
-      ${S.payments.length ? `<table><thead><tr><th>Data</th><th>Pessoa</th><th>Cartão</th><th class="num">Valor</th><th></th></tr></thead><tbody>${linhasPag}</tbody></table>`
-        : '<div class="empty">Nenhum pagamento registrado.</div>'}
-    </div>`
-}
-
-// --- aba: extratos ---
-function extratos() {
-  if (!S.accounts.length) {
-    return head('Extratos bancários', 'Importados dos PDFs que você manda pro bot') +
-      `<div class="card"><div class="empty"><span class="big">🏦</span>Nenhum extrato importado.<br><br>
-      Mande o PDF do extrato pro bot no WhatsApp com o <b>nome da conta na legenda</b> (ex.: <code>Nubank</code>).</div></div>`
-  }
-  return head('Extratos bancários', 'Saídas por mês, lidas dos PDFs') +
-    S.accounts.map((a) => `<div class="card">
-      <h3>${esc(a.name)}
-        <small>${a.months.length} mês(es)</small>
-        <button class="btn danger sm" style="float:right" data-acao="del-conta" data-conta="${esc(a.name)}">Excluir conta</button>
-      </h3>
-      ${barChart(a.months.slice().reverse().map((m) => ({ rotulo: mesBR(m.month), valor: m.saidas })), { altura: 140 })}
-      <table style="margin-top:14px"><thead><tr><th>Mês</th><th class="num">Saídas</th><th class="num">Entradas</th><th class="num">Lançamentos</th></tr></thead>
-      <tbody>${a.months.map((m) => `<tr><td>${mesBR(m.month)}</td>
-        <td class="num" style="color:var(--danger)">${money(m.saidas)}</td>
-        <td class="num" style="color:var(--ok)">${money(m.entradas)}</td>
-        <td class="num muted">${m.count}</td></tr>`).join('')}</tbody></table>
-    </div>`).join('')
-}
-
-// --- aba: configurações ---
-function cfgTab() {
+// --- Mais ---
+function mais() {
   const s = S.settings
-  return head('Configurações', 'Chave PIX das cobranças e disparo manual dos lembretes') + `
-    <div class="card">
-      <h3>Chave PIX <small>vai no rodapé de toda cobrança</small></h3>
-      <div class="row">
-        <div class="field" style="flex:2 1 240px"><label>Chave</label><input id="cfgPix" value="${esc(s.pix)}" placeholder="email, telefone ou aleatória"></div>
-        <div class="field"><label>Nome do titular</label><input id="cfgPixNome" value="${esc(s.pixNome)}" placeholder="Daniel S."></div>
-      </div>
-      <button class="btn" data-acao="salvar-config">Salvar</button>
+  return `
+    <div class="card"><h3>Atalhos</h3><div class="rows">
+      ${linha({ av: '📋', t1: 'Lançar em lote', t2: 'várias linhas de uma vez', acao: 'abrir-lote' })}
+      ${linha({ av: '💳', t1: 'Novo cartão', t2: 'fechamento, vencimento, limite', acao: 'novo-cartao' })}
+      ${linha({ av: '👤', t1: 'Nova pessoa', t2: 'nome e telefone', acao: 'nova-pessoa' })}
+    </div></div>
+
+    <div class="card"><h3>Chave PIX <small>vai em toda cobrança</small></h3>
+      <div class="field"><label>Chave</label><input id="cfgPix" value="${esc(s.pix)}" placeholder="email, telefone ou aleatória"></div>
+      <div class="field"><label>Nome do titular</label><input id="cfgPixNome" value="${esc(s.pixNome)}" placeholder="Daniel S."></div>
+      <button class="btn full" data-acao="salvar-config">Salvar</button>
     </div>
 
-    <div class="card">
-      <h3>Cobrança automática</h3>
-      <div class="list-line"><span class="who">Agendador</span><b>${S.cobranca.ativo ? '<span class="tag ok">ligado</span>' : '<span class="tag danger">desligado</span>'}</b></div>
-      <div class="list-line"><span class="who">Horário da checagem diária</span><b class="mono">${esc(S.cobranca.horario)}</b></div>
-      <div class="list-line"><span class="who">Modo</span><b>${S.cobranca.dryRun ? '<span class="tag warn">simulação</span>' : '<span class="tag danger">envio real</span>'}</b></div>
-      <div class="list-line"><span class="who">Gatilhos</span><b class="mono">D-5 · D-2 · D-0 · D+1</b></div>
-
-      <div class="banner warn" style="margin-top:16px">
-        ⚠️ Enquanto estiver em <b>simulação</b> nada é enviado. Para ligar de verdade, suba o bot com
-        <code>COBRANCA_REAL=1</code> — e confira antes as mensagens no botão abaixo.
+    <div class="card"><h3>Cobrança automática</h3>
+      <div class="rows">
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Agendador</span>${S.cobranca.ativo ? '<span class="tag ok">ligado</span>' : '<span class="tag danger">desligado</span>'}</div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Horário</span><span class="tag">${esc(S.cobranca.horario)}</span></div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Modo</span>${S.cobranca.dryRun ? '<span class="tag warn">simulação</span>' : '<span class="tag danger">envio real</span>'}</div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Gatilhos</span><span class="tag">D-5 · D-2 · D-0 · D+1</span></div>
       </div>
-      <div class="row" style="margin-top:4px">
-        <button class="btn ghost shrink" data-acao="simular-lembretes">🧪 Simular lembretes de hoje</button>
-        <button class="btn ghost shrink" data-acao="rodar-lembretes">📤 Disparar lembretes de hoje</button>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn ghost" data-acao="simular-lembretes">🧪 Simular</button>
+        <button class="btn ghost" data-acao="rodar-lembretes">📤 Disparar</button>
       </div>
     </div>
 
-    <div class="card">
-      <h3>Comandos do WhatsApp <small>tudo aqui também funciona por lá</small></h3>
-      <table><tbody>
-        ${[
-          ['/cartao add nubank fecha 3 vence 10 limite 5000', 'cadastra cartão'],
-          ['/cartoes', 'lista cartões e faturas'],
-          ['/gasto 22 danilo nubank lanche', 'lança gasto (aceita 3x e 12/07)'],
-          ['/lote', 'várias linhas de uma vez (confirma com /confirmar)'],
-          ['/pagou 50 danilo nubank', 'registra pagamento recebido'],
-          ['/fatura nubank 2026-09', 'detalha uma fatura'],
-          ['/pessoa danilo 11999998888', 'vincula telefone'],
-          ['/cobrar nubank [real]', 'cobra quem deve no cartão'],
-          ['/contas', 'resumo geral'],
-          ['/painel', 'link deste painel'],
-        ].map(([c, d]) => `<tr><td class="mono" style="color:var(--accent-2)">${esc(c)}</td><td class="muted">${esc(d)}</td></tr>`).join('')}
-      </tbody></table>
-    </div>`
+    <div class="card"><h3>Extratos bancários <small>dos PDFs</small></h3>
+      ${S.accounts.length ? S.accounts.map((a) => `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <b style="font-size:14px">${esc(a.name)}</b>
+            <button class="btn danger sm" style="margin-left:auto" data-acao="del-conta" data-conta="${esc(a.name)}">Excluir</button>
+          </div>
+          ${barChart(a.months.slice().reverse().map((m) => ({ rotulo: mesBR(m.month), valor: m.saidas })), { altura: 120 })}
+        </div>`).join('')
+        : '<div class="empty">Nenhum extrato.<br>Mande o PDF pro bot com o nome da conta na legenda.</div>'}
+    </div>
+
+    <div class="card"><h3>Comandos do WhatsApp</h3><div class="rows">
+      ${[
+        ['/gasto 22 danilo nubank lanche', 'lança um gasto'],
+        ['/lote', 'vários de uma vez'],
+        ['/pagou 50 danilo', 'registra pagamento'],
+        ['/cartoes', 'faturas e vencimentos'],
+        ['/cobrar nubank', 'cobra quem deve'],
+        ['/painel', 'link deste painel'],
+      ].map(([c, d]) => `<div class="row-item" style="cursor:default"><span class="grow"><span class="t1 mono" style="font-size:13px;color:var(--accent-2)">${esc(c)}</span><span class="t2">${esc(d)}</span></span></div>`).join('')}
+    </div></div>
+
+    <button class="btn ghost full" data-acao="sair" style="margin-top:14px">Sair do painel</button>`
 }
 
 // ---------- ações ----------
 
 function ligarEventos() {
-  document.querySelectorAll('[data-acao]').forEach((b) => { b.onclick = () => acoes[b.dataset.acao]?.(b.dataset) })
+  $$('[data-acao]').forEach((b) => { b.onclick = () => { vibrar(); acoes[b.dataset.acao]?.(b.dataset) } })
 }
-
-const numeroBR = (v) => Number(String(v ?? '').replace(/\./g, '').replace(',', '.'))
 
 const acoes = {
   'novo-cartao': () => formCartao(null),
   'editar-cartao': ({ card }) => formCartao(S.cards.find((c) => c.key === card)),
-
-  'del-cartao': async ({ card }) => {
-    if (!await confirmar(`Excluir o cartão "${S.cards.find((c) => c.key === card)?.name}"? Os gastos continuam salvos, mas ficam sem cartão.`)) return
-    await api(`/cards/${encodeURIComponent(card)}`, { method: 'DELETE' })
-    toast('Cartão excluído.'); render()
-  },
-
   'nova-pessoa': () => formPessoa(null),
-  'editar-pessoa': ({ p }) => formPessoa(S.pessoas.find((x) => x.key === p)),
-
-  'del-pessoa': async ({ p }) => {
-    const pe = S.pessoas.find((x) => x.key === p)
-    if (!await confirmar(`Excluir "${pe?.name}" e TODO o histórico dela? Isso não tem volta.`)) return
-    await api(`/people/${encodeURIComponent(p)}`, { method: 'DELETE' })
-    toast('Pessoa excluída.'); render()
-  },
-
-  'receber': ({ p }) => formPagamento(S.pessoas.find((x) => x.key === p)),
-
-  'novo-gasto': () => { TAB = 'lancar'; render() },
-
-  'salvar-unico': async () => {
-    const pessoa = $('#uPessoa').value.trim()
-    const valor = numeroBR($('#uValor').value)
-    if (!pessoa || !valor) return toast('Informe pessoa e valor.', 'err')
-    await api('/expenses', {
-      body: {
-        person: pessoa, value: valor, card: $('#uCartao').value || null,
-        parcelas: Number($('#uParcelas').value) || 1, note: $('#uNota').value.trim(),
-        at: $('#uData').value ? new Date($('#uData').value + 'T12:00:00').toISOString() : null,
-      },
-    })
-    toast(`Lançado ${money(valor)} para ${pessoa}.`)
-    TAB = 'resumo'; render()
-  },
-
-  'preview-lote': async () => {
-    const texto = $('#lTexto').value
-    const card = $('#lCartao').value || null
-    if (!texto.trim()) return toast('Cole as linhas do lote.', 'err')
-    const r = await api('/expenses/preview', { body: { texto, card } })
-    if (!r.ok.length) return toast('Não consegui ler nenhuma linha.', 'err')
-
-    const total = r.ok.reduce((s, i) => s + i.value, 0)
-    const corpo = `
-      <table><thead><tr><th>#</th><th>Pessoa</th><th>Cartão</th><th>Data</th><th class="num">Valor</th></tr></thead><tbody>
-      ${r.ok.map((i, n) => `<tr>
-        <td class="muted">${n + 1}</td>
-        <td><b>${esc(i.pessoa)}</b>${i.note ? `<br><span class="muted" style="font-size:12px">${esc(i.note)}</span>` : ''}</td>
-        <td>${i.cardName ? `<span class="tag ${i.cardExiste ? 'accent' : 'warn'}">${esc(i.cardName)}${i.cardExiste ? '' : ' (não existe)'}</span>` : '<span class="tag">—</span>'}</td>
-        <td class="mono muted">${dataBR(i.at)}</td>
-        <td class="num">${money(i.value)}${i.parcelas > 1 ? `<br><span class="tag">${i.parcelas}x</span>` : ''}</td></tr>`).join('')}
-      </tbody></table>
-      <div class="list-line" style="margin-top:14px;font-size:15px"><b>Total</b><b>${money(total)}</b></div>
-      ${r.erros.length ? `<div class="banner warn" style="margin-top:14px">⚠️ Não entendi ${r.erros.length} linha(s):<br>${r.erros.map((e) => `<code>${esc(e.linha)}</code> — ${esc(e.erro)}`).join('<br>')}</div>` : ''}`
-
-    modal({
-      titulo: `Confira o lote — ${r.ok.length} lançamento(s)`,
-      corpo,
-      acoes: [{
-        label: 'Gravar tudo', onClick: async ({ fechar, btn }) => {
-          btn.disabled = true
-          const res = await api('/expenses/lote', { body: { texto, card } })
-          fechar(); toast(`${res.lancados} lançamento(s) gravados (${res.parcelas} parcelas).`)
-          TAB = 'resumo'; render()
-        },
-      }],
-    })
-  },
-
-  'del-gasto': async ({ id, grupo }) => {
-    if (!await confirmar(grupo ? 'Excluir esse lançamento e TODAS as parcelas dele?' : 'Excluir esse lançamento?')) return
-    await api(`/expenses/${encodeURIComponent(id)}${grupo ? '?grupo=1' : ''}`, { method: 'DELETE' })
-    toast('Lançamento excluído.'); render()
-  },
-
-  'del-pagamento': async ({ id }) => {
-    if (!await confirmar('Excluir esse pagamento?')) return
-    await api(`/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
-    toast('Pagamento excluído.'); render()
-  },
+  'ver-pessoa': ({ p }) => fichaPessoa(p),
+  'ver-gasto': ({ id }) => fichaGasto(id),
+  'ver-pagamento': ({ id }) => fichaPagamento(id),
+  'cobrar': ({ card }) => formCobranca(card),
+  'ver-fatura': ({ card }) => verFaturas(card),
+  'abrir-lote': () => formLote(),
 
   'del-conta': async ({ conta }) => {
-    if (!await confirmar(`Excluir os extratos da conta "${conta}"?`)) return
+    if (!await confirmar(`Excluir os extratos da conta "${conta}"?`, 'Excluir')) return
     await api(`/accounts/${encodeURIComponent(conta)}`, { method: 'DELETE' })
     toast('Extratos excluídos.'); render()
   },
 
   'salvar-config': async () => {
     await api('/settings', { body: { pix: $('#cfgPix').value.trim(), pixNome: $('#cfgPixNome').value.trim() } })
-    toast('Configurações salvas.'); render()
+    toast('Salvo.')
   },
-
-  'cobrar': ({ card }) => formCobranca(card),
-  'ver-fatura': ({ card }) => verFaturas(card),
 
   'simular-lembretes': async () => {
     const r = await api('/lembretes', { body: { real: false } })
-    mostrarResultadoCobranca(r.resultados, true)
+    resultadoCobranca(r.resultados, true)
   },
 
   'rodar-lembretes': async () => {
-    if (!await confirmar('Disparar AGORA os lembretes de hoje de verdade no WhatsApp?')) return
+    if (!await confirmar('Disparar agora os lembretes de hoje de verdade no WhatsApp?', 'Disparar')) return
     const r = await api('/lembretes', { body: { real: true } })
-    mostrarResultadoCobranca(r.resultados, false); render()
+    resultadoCobranca(r.resultados, false); render()
   },
+
+  'sair': () => { sessionStorage.removeItem(CHAVE); location.reload() },
+}
+
+// ---------- entrada rápida (FAB) ----------
+
+function formGasto() {
+  const recentes = S.pessoas.slice(0, 8)
+  const corpo = `
+    <div class="field">
+      <label>Valor total</label>
+      <input id="gValor" class="valor-big" inputmode="decimal" placeholder="0,00" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>Quem comprou</label>
+      <div class="chips" id="chipsPessoa">
+        ${recentes.map((p) => `<button class="chip" data-v="${esc(p.name)}">${esc(p.name)}</button>`).join('')}
+        <button class="chip" data-novo="1">+ outro</button>
+      </div>
+      <input id="gPessoa" placeholder="nome" style="margin-top:10px;display:${recentes.length ? 'none' : 'block'}">
+    </div>
+
+    ${S.cards.length ? `<div class="field">
+      <label>Cartão</label>
+      <div class="chips" id="chipsCartao">
+        ${S.cards.map((c, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}
+        <button class="chip" data-v="">sem cartão</button>
+      </div>
+    </div>` : ''}
+
+    <div class="field">
+      <label>Parcelas</label>
+      <div class="chips" id="chipsParcela">
+        ${[1, 2, 3, 4, 6, 10, 12].map((n) => `<button class="chip dim ${n === 1 ? 'on' : ''}" data-v="${n}">${n}x</button>`).join('')}
+      </div>
+      <div class="muted" id="gPorParcela" style="font-size:12.5px;margin-top:8px"></div>
+    </div>
+
+    <div class="field">
+      <label>Quando</label>
+      <div class="chips" id="chipsData">
+        <button class="chip dim on" data-v="0">Hoje</button>
+        <button class="chip dim" data-v="1">Ontem</button>
+        <button class="chip dim" data-outra="1">Outra data</button>
+      </div>
+      <input id="gData" type="date" value="${hojeISO()}" style="margin-top:10px;display:none">
+    </div>
+
+    <div class="field"><label>Observação</label><input id="gNota" placeholder="lanche, uber, mercado…"></div>`
+
+  const { bg, fechar } = sheet({
+    titulo: 'Novo gasto',
+    corpo,
+    acoes: [{
+      label: 'Lançar', onClick: async ({ btn }) => {
+        const valor = numeroBR($('#gValor', bg).value)
+        const pessoa = ($('#gPessoa', bg).value.trim()) || selecionado('#chipsPessoa')
+        if (!valor) return toast('Informe o valor.', 'err')
+        if (!pessoa) return toast('Informe quem comprou.', 'err')
+        btn.disabled = true
+        try {
+          await api('/expenses', {
+            body: {
+              person: pessoa, value: valor,
+              card: S.cards.length ? selecionado('#chipsCartao') : null,
+              parcelas: Number(selecionado('#chipsParcela')) || 1,
+              note: $('#gNota', bg).value.trim(),
+              at: new Date($('#gData', bg).value + 'T12:00:00').toISOString(),
+            },
+          })
+          fechar(); toast(`${money(valor)} lançado para ${pessoa}.`); render()
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+    aoAbrir: () => setTimeout(() => $('#gValor', bg).focus(), 340),
+  })
+
+  const selecionado = (sel) => $(`${sel} .chip.on`, bg)?.dataset.v ?? ''
+
+  // grupos de chips com seleção única
+  for (const sel of ['#chipsPessoa', '#chipsCartao', '#chipsParcela', '#chipsData']) {
+    const grupo = $(sel, bg)
+    if (!grupo) continue
+    $$('.chip', grupo).forEach((c) => {
+      c.onclick = () => {
+        vibrar()
+        if (c.dataset.novo) { const i = $('#gPessoa', bg); i.style.display = 'block'; i.focus(); $$('.chip', grupo).forEach((x) => x.classList.remove('on')); return }
+        if (c.dataset.outra) { const i = $('#gData', bg); i.style.display = 'block'; i.showPicker?.(); $$('.chip', grupo).forEach((x) => x.classList.remove('on')); return }
+        $$('.chip', grupo).forEach((x) => x.classList.remove('on'))
+        c.classList.add('on')
+        if (sel === '#chipsPessoa') $('#gPessoa', bg).value = ''
+        if (sel === '#chipsData') {
+          const d = new Date(); d.setDate(d.getDate() - Number(c.dataset.v))
+          $('#gData', bg).value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        }
+        if (sel === '#chipsParcela') mostrarParcela()
+      }
+    })
+  }
+
+  const mostrarParcela = () => {
+    const n = Number(selecionado('#chipsParcela')) || 1
+    const v = numeroBR($('#gValor', bg).value)
+    $('#gPorParcela', bg).textContent = n > 1 && v ? `${n}x de ${money(v / n)} — uma por fatura` : ''
+  }
+  $('#gValor', bg).oninput = mostrarParcela
+}
+
+// ---------- fichas (toque numa linha) ----------
+
+function fichaPessoa(chave) {
+  const p = S.pessoas.find((x) => x.key === chave)
+  if (!p) return
+  const cartoes_ = Object.fromEntries(S.cards.map((c) => [c.key, c.name]))
+  const ultimos = p.items.slice(-12).reverse()
+
+  const { bg, fechar } = sheet({
+    titulo: p.name,
+    corpo: `
+      <div class="grid g2" style="margin-bottom:14px">
+        <div class="kpi warn"><div class="lbl">Deve</div><div class="val">${money(p.saldo)}</div></div>
+        <div class="kpi ok"><div class="lbl">Já pagou</div><div class="val">${money(p.totalPaid)}</div></div>
+      </div>
+      <div class="btn-row" style="margin-bottom:16px">
+        <button class="btn" data-f="receber">💵 Recebi</button>
+        <button class="btn ghost" data-f="editar">✏️ Editar</button>
+      </div>
+      <h3 style="font-size:13px;margin-bottom:8px">Últimos lançamentos</h3>
+      <div class="rows">
+        ${ultimos.length ? ultimos.map((i) => `<div class="row-item" style="cursor:default">
+          <span class="grow"><span class="t1" style="font-weight:500;font-size:14px">${esc(i.note || 'sem descrição')}</span>
+          <span class="t2">${dataBR(i.at)}${i.card ? ' · ' + esc(cartoes_[i.card] || i.card) : ''}${i.parcela ? ` · ${i.parcela.n}/${i.parcela.total}` : ''}</span></span>
+          <b class="v">${money(i.value)}</b></div>`).join('')
+          : '<div class="empty">Sem lançamentos.</div>'}
+      </div>`,
+  })
+
+  $('[data-f="receber"]', bg).onclick = () => { fechar(); setTimeout(() => formPagamento(p), 200) }
+  $('[data-f="editar"]', bg).onclick = () => { fechar(); setTimeout(() => formPessoa(p), 200) }
+}
+
+function fichaGasto(id) {
+  const e = S.expenses.find((x) => x.id === id)
+  if (!e) return
+  const nome = S.pessoas.find((p) => p.key === e.person)?.name || e.person
+  const cartao = S.cards.find((c) => c.key === e.card)?.name
+
+  const { bg, fechar } = sheet({
+    titulo: money(e.value),
+    corpo: `<div class="rows" style="margin-bottom:8px">
+      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Pessoa</span><b>${esc(nome)}</b></div>
+      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Cartão</span><b>${cartao ? esc(cartao) : '—'}</b></div>
+      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Data</span><b>${new Date(e.at).toLocaleDateString('pt-BR')}</b></div>
+      <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Cai na fatura</span><b>${mesLongo(e.competencia)}</b></div>
+      ${e.parcela ? `<div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Parcela</span><b>${e.parcela.n} de ${e.parcela.total}</b></div>` : ''}
+      ${e.note ? `<div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Obs</span><b>${esc(e.note)}</b></div>` : ''}
+    </div>`,
+    acoes: [{
+      label: e.parcela ? 'Excluir todas as parcelas' : 'Excluir', classe: 'danger',
+      onClick: async ({ fechar }) => {
+        if (!await confirmar(e.parcela ? `Excluir esse lançamento e as ${e.parcela.total} parcelas?` : 'Excluir esse lançamento?', 'Excluir')) return
+        await api(`/expenses/${encodeURIComponent(id)}${e.parcela ? '?grupo=1' : ''}`, { method: 'DELETE' })
+        fechar(); toast('Excluído.'); render()
+      },
+    }],
+  })
+  void bg; void fechar
+}
+
+function fichaPagamento(id) {
+  const p = S.payments.find((x) => x.id === id)
+  if (!p) return
+  const nome = S.pessoas.find((x) => x.key === p.person)?.name || p.person
+  sheet({
+    titulo: `${money(p.value)} de ${nome}`,
+    corpo: `<p class="muted" style="font-size:14px;padding:4px 0 12px">Recebido em ${new Date(p.at).toLocaleDateString('pt-BR')}${p.note ? ` · ${esc(p.note)}` : ''}.</p>`,
+    acoes: [{
+      label: 'Excluir', classe: 'danger',
+      onClick: async ({ fechar }) => {
+        if (!await confirmar('Excluir esse pagamento?', 'Excluir')) return
+        await api(`/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        fechar(); toast('Excluído.'); render()
+      },
+    }],
+  })
 }
 
 // ---------- formulários ----------
 
 function formCartao(c) {
-  modal({
-    titulo: c ? `Editar ${c.name}` : 'Novo cartão',
+  const { bg, fechar } = sheet({
+    titulo: c ? c.name : 'Novo cartão',
     corpo: `
       <div class="field"><label>Nome</label><input id="fNome" value="${esc(c?.name || '')}" placeholder="Nubank" ${c ? 'readonly' : ''}></div>
-      <div class="row">
-        <div class="field"><label>Fecha no dia</label><input id="fFecha" type="number" min="1" max="31" value="${c?.fechamento ?? ''}" placeholder="3"></div>
-        <div class="field"><label>Vence no dia</label><input id="fVence" type="number" min="1" max="31" value="${c?.vencimento ?? ''}" placeholder="10"></div>
+      <div class="field-row">
+        <div class="field"><label>Fecha dia</label><input id="fFecha" type="number" inputmode="numeric" min="1" max="31" value="${c?.fechamento ?? ''}" placeholder="3"></div>
+        <div class="field"><label>Vence dia</label><input id="fVence" type="number" inputmode="numeric" min="1" max="31" value="${c?.vencimento ?? ''}" placeholder="10"></div>
       </div>
-      <div class="row">
-        <div class="field"><label>Limite (opcional)</label><input id="fLimite" value="${c?.limite || ''}" placeholder="5000" inputmode="decimal"></div>
-        <div class="field" style="flex:0 1 110px"><label>Cor</label><input id="fCor" type="color" value="${esc(c?.cor || '#7c5cff')}" style="padding:4px;height:38px"></div>
+      <div class="field-row">
+        <div class="field"><label>Limite</label><input id="fLimite" inputmode="decimal" value="${c?.limite || ''}" placeholder="5000"></div>
+        <div class="field" style="flex:0 0 84px"><label>Cor</label><input id="fCor" type="color" value="${esc(c?.cor || '#7c5cff')}" style="padding:4px;min-height:48px"></div>
       </div>
-      <div class="muted" style="font-size:12.5px">Compras feitas <b>depois</b> do dia de fechamento entram na fatura do mês seguinte — é assim que eu acerto a fatura sozinho.</div>`,
+      <div class="banner info">Compra feita <b>depois</b> do dia de fechamento entra na fatura do mês seguinte — é assim que eu acerto a fatura sozinho.</div>
+      ${c ? '<button class="btn danger full" data-f="excluir">Excluir cartão</button>' : ''}`,
     acoes: [{
-      label: 'Salvar', onClick: async ({ fechar, btn }) => {
-        const name = $('#fNome').value.trim()
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const name = $('#fNome', bg).value.trim()
         if (!name) return toast('Informe o nome.', 'err')
         btn.disabled = true
-        await api('/cards', {
-          body: {
-            name,
-            fechamento: $('#fFecha').value ? Number($('#fFecha').value) : null,
-            vencimento: $('#fVence').value ? Number($('#fVence').value) : null,
-            limite: numeroBR($('#fLimite').value), cor: $('#fCor').value,
-          },
-        })
-        fechar(); toast('Cartão salvo.'); render()
+        try {
+          await api('/cards', {
+            body: {
+              name,
+              fechamento: $('#fFecha', bg).value ? Number($('#fFecha', bg).value) : null,
+              vencimento: $('#fVence', bg).value ? Number($('#fVence', bg).value) : null,
+              limite: numeroBR($('#fLimite', bg).value), cor: $('#fCor', bg).value,
+            },
+          })
+          fechar(); toast('Cartão salvo.'); render()
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
       },
     }],
+  })
+
+  $('[data-f="excluir"]', bg)?.addEventListener('click', async () => {
+    if (!await confirmar(`Excluir o cartão "${c.name}"? Os gastos continuam salvos, mas ficam sem cartão.`, 'Excluir')) return
+    await api(`/cards/${encodeURIComponent(c.key)}`, { method: 'DELETE' })
+    fechar(); toast('Cartão excluído.'); render()
   })
 }
 
 function formPessoa(p) {
-  modal({
-    titulo: p ? `Editar ${p.name}` : 'Nova pessoa',
+  const { bg, fechar } = sheet({
+    titulo: p ? p.name : 'Nova pessoa',
     corpo: `
       <div class="field"><label>Nome</label><input id="pNome" value="${esc(p?.name || '')}" placeholder="danilo" ${p ? 'readonly' : ''}></div>
-      <div class="field"><label>Telefone com DDD</label><input id="pFone" value="${esc(p?.phone || '')}" placeholder="11999998888" inputmode="tel"></div>
-      <div class="muted" style="font-size:12.5px">Sem telefone eu não consigo mandar a cobrança automática pra essa pessoa.</div>`,
+      <div class="field"><label>Telefone com DDD</label><input id="pFone" type="tel" inputmode="tel" value="${esc(p?.phone || '')}" placeholder="11999998888"></div>
+      <div class="banner info">📱 Sem telefone eu não consigo mandar a cobrança automática.</div>
+      ${p ? '<button class="btn danger full" data-f="excluir">Excluir pessoa e histórico</button>' : ''}`,
     acoes: [{
-      label: 'Salvar', onClick: async ({ fechar, btn }) => {
-        const name = $('#pNome').value.trim()
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const name = $('#pNome', bg).value.trim()
         if (!name) return toast('Informe o nome.', 'err')
         btn.disabled = true
-        await api('/people', { body: { name, phone: $('#pFone').value.trim() } })
-        fechar(); toast('Pessoa salva.'); render()
+        try {
+          await api('/people', { body: { name, phone: $('#pFone', bg).value.trim() } })
+          fechar(); toast('Pessoa salva.'); render()
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
       },
     }],
+  })
+
+  $('[data-f="excluir"]', bg)?.addEventListener('click', async () => {
+    if (!await confirmar(`Excluir "${p.name}" e TODO o histórico? Isso não tem volta.`, 'Excluir tudo')) return
+    await api(`/people/${encodeURIComponent(p.key)}`, { method: 'DELETE' })
+    fechar(); toast('Pessoa excluída.'); render()
   })
 }
 
 function formPagamento(p) {
-  if (!p) return
-  const opts = S.cards.map((c) => `<option value="${esc(c.key)}">${esc(c.name)}</option>`).join('')
-  modal({
+  const { bg, fechar } = sheet({
     titulo: `Recebi de ${p.name}`,
     corpo: `
-      <div class="banner info">Saldo atual: <b>&nbsp;${money(p.saldo)}</b></div>
-      <div class="row">
-        <div class="field"><label>Valor recebido</label><input id="gValor" value="${p.saldo > 0 ? String(p.saldo).replace('.', ',') : ''}" inputmode="decimal"></div>
-        <div class="field"><label>Abater do cartão</label><select id="gCartao"><option value="">— geral —</option>${opts}</select></div>
+      <div class="field"><label>Valor recebido</label>
+        <input id="rValor" class="valor-big" inputmode="decimal" value="${p.saldo > 0 ? String(p.saldo.toFixed(2)).replace('.', ',') : ''}"></div>
+      <div class="chips" style="margin:-4px 0 16px">
+        <button class="chip dim" data-quick="tudo">Tudo (${money(Math.max(p.saldo, 0))})</button>
+        <button class="chip dim" data-quick="metade">Metade</button>
       </div>
-      <div class="field"><label>Observação</label><input id="gNota" placeholder="pix, dinheiro…"></div>`,
+      ${S.cards.length ? `<div class="field"><label>Abater de qual cartão</label>
+        <div class="chips" id="rCartao">
+          <button class="chip on" data-v="">Geral</button>
+          ${S.cards.map((c) => `<button class="chip" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}
+        </div></div>` : ''}
+      <div class="field"><label>Observação</label><input id="rNota" placeholder="pix, dinheiro…"></div>`,
     acoes: [{
-      label: 'Registrar', onClick: async ({ fechar, btn }) => {
-        const v = numeroBR($('#gValor').value)
+      label: 'Registrar', onClick: async ({ btn }) => {
+        const v = numeroBR($('#rValor', bg).value)
         if (!v) return toast('Informe o valor.', 'err')
         btn.disabled = true
-        const r = await api('/payments', { body: { person: p.key, value: v, card: $('#gCartao').value || null, note: $('#gNota').value.trim() } })
-        fechar(); toast(`Registrado. Saldo agora: ${money(r.saldo)}`); render()
+        try {
+          const r = await api('/payments', {
+            body: { person: p.key, value: v, card: $('#rCartao .chip.on', bg)?.dataset.v || null, note: $('#rNota', bg).value.trim() },
+          })
+          fechar(); toast(`Registrado. Saldo: ${money(r.saldo)}`); render()
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+    aoAbrir: () => setTimeout(() => $('#rValor', bg).select(), 340),
+  })
+
+  $$('[data-quick]', bg).forEach((b) => {
+    b.onclick = () => {
+      vibrar()
+      const v = b.dataset.quick === 'tudo' ? p.saldo : p.saldo / 2
+      $('#rValor', bg).value = String(Math.max(v, 0).toFixed(2)).replace('.', ',')
+    }
+  })
+  const grupo = $('#rCartao', bg)
+  if (grupo) $$('.chip', grupo).forEach((c) => { c.onclick = () => { vibrar(); $$('.chip', grupo).forEach((x) => x.classList.remove('on')); c.classList.add('on') } })
+}
+
+function formLote() {
+  const { bg, fechar } = sheet({
+    titulo: 'Lançar em lote',
+    corpo: `
+      ${S.cards.length ? `<div class="field"><label>Cartão padrão</label>
+        <div class="chips" id="lCartao">
+          ${S.cards.map((c, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}
+          <button class="chip" data-v="">sem cartão</button>
+        </div></div>` : ''}
+      <div class="field"><label>Uma linha por gasto</label>
+        <textarea id="lTexto" placeholder="22 danilo lanche&#10;35,90 maria uber&#10;300 joao 3x tenis&#10;18 ana #inter 12/07"></textarea></div>
+      <div class="banner info">Ordem livre: <b>valor</b> · <b>pessoa</b> · <code>#cartao</code> · <code>3x</code> · <code>12/07</code> · o resto vira observação.</div>`,
+    acoes: [{
+      label: 'Conferir', onClick: async ({ btn }) => {
+        const texto = $('#lTexto', bg).value
+        if (!texto.trim()) return toast('Cole as linhas.', 'err')
+        btn.disabled = true
+        const card = $('#lCartao .chip.on', bg)?.dataset.v || null
+        try {
+          const r = await api('/expenses/preview', { body: { texto, card } })
+          if (!r.ok.length) { btn.disabled = false; return toast('Não consegui ler nenhuma linha.', 'err') }
+          fechar(); setTimeout(() => previewLote(r, texto, card), 200)
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+
+  const grupo = $('#lCartao', bg)
+  if (grupo) $$('.chip', grupo).forEach((c) => { c.onclick = () => { vibrar(); $$('.chip', grupo).forEach((x) => x.classList.remove('on')); c.classList.add('on') } })
+}
+
+function previewLote(r, texto, card) {
+  const total = r.ok.reduce((s, i) => s + i.value, 0)
+  sheet({
+    titulo: `${r.ok.length} lançamento(s)`,
+    corpo: `
+      <div class="kpi" style="margin-bottom:14px"><div class="lbl">Total do lote</div><div class="val">${money(total)}</div></div>
+      <div class="rows">
+        ${r.ok.map((i) => `<div class="row-item" style="cursor:default">
+          <span class="avatar">${esc(iniciais(i.pessoa))}</span>
+          <span class="grow"><span class="t1">${esc(i.pessoa)}</span>
+          <span class="t2">${[i.note, i.cardName, i.parcelas > 1 ? i.parcelas + 'x' : null, dataBR(i.at)].filter(Boolean).map(esc).join(' · ')}</span></span>
+          <b class="v">${money(i.value)}</b></div>`).join('')}
+      </div>
+      ${r.erros.length ? `<div class="banner warn" style="margin-top:14px">⚠️ Não entendi ${r.erros.length} linha(s):<br>${r.erros.map((e) => `<code>${esc(e.linha)}</code>`).join('<br>')}</div>` : ''}
+      ${r.ok.some((i) => i.cardName && !i.cardExiste) ? '<div class="banner warn">⚠️ Tem cartão não cadastrado — esses vão entrar sem cartão.</div>' : ''}`,
+    acoes: [{
+      label: 'Gravar tudo', onClick: async ({ fechar, btn }) => {
+        btn.disabled = true
+        const res = await api('/expenses/lote', { body: { texto, card } })
+        fechar(); toast(`${res.lancados} gravados (${res.parcelas} parcelas).`)
+        TAB = 'resumo'; render()
       },
     }],
   })
 }
 
+// ---------- cobrança ----------
+
 function formCobranca(cardKey) {
   const c = S.cards.find((x) => x.key === cardKey)
-  const opts = c.competencias.map((k) => `<option value="${esc(k)}" ${k === c.fatura.competencia ? 'selected' : ''}>${mesLongo(k)}</option>`).join('')
-  modal({
+  const { bg, fechar } = sheet({
     titulo: `Cobrar — ${c.name}`,
     corpo: `
-      <div class="field"><label>Fatura</label><select id="cbComp">${opts}</select></div>
-      <div class="banner info">Primeiro eu <b>&nbsp;simulo&nbsp;</b> e te mostro exatamente o que seria enviado pra cada pessoa.</div>`,
+      <div class="field"><label>Fatura</label>
+        <select id="cbComp">${c.competencias.map((k) => `<option value="${esc(k)}" ${k === c.fatura.competencia ? 'selected' : ''}>${mesLongo(k)}</option>`).join('')}</select></div>
+      <div class="banner info">Primeiro eu <b>simulo</b> e te mostro exatamente o que cada pessoa receberia.</div>`,
     acoes: [
       {
-        label: '🧪 Simular', onClick: async ({ fechar, btn }) => {
+        label: '🧪 Simular', onClick: async ({ btn }) => {
           btn.disabled = true
-          const r = await api('/cobrar', { body: { card: cardKey, competencia: $('#cbComp').value, real: false } })
-          fechar(); mostrarResultadoCobranca(r.resultados, true, { card: cardKey, competencia: r.fatura.competencia })
+          const comp = $('#cbComp', bg).value
+          const r = await api('/cobrar', { body: { card: cardKey, competencia: comp, real: false } })
+          fechar(); setTimeout(() => resultadoCobranca(r.resultados, true, { card: cardKey, competencia: comp }), 200)
         },
       },
       {
-        label: '📤 Enviar de verdade', classe: 'danger', onClick: async ({ fechar, btn }) => {
-          const comp = $('#cbComp').value
-          if (!await confirmar('Enviar as cobranças agora no WhatsApp?')) return
+        label: '📤 Enviar', classe: 'danger', onClick: async ({ btn }) => {
+          const comp = $('#cbComp', bg).value
+          if (!await confirmar('Enviar as cobranças agora no WhatsApp?', 'Enviar')) return
           btn.disabled = true
           const r = await api('/cobrar', { body: { card: cardKey, competencia: comp, real: true } })
-          fechar(); mostrarResultadoCobranca(r.resultados, false); render()
+          fechar(); setTimeout(() => resultadoCobranca(r.resultados, false), 200); render()
         },
       },
     ],
@@ -717,78 +858,124 @@ function formCobranca(cardKey) {
 const ROTULO = {
   enviado: '<span class="tag ok">enviado</span>',
   simulado: '<span class="tag accent">simulado</span>',
-  quitado: '<span class="tag ok">já quitado</span>',
+  quitado: '<span class="tag ok">quitado</span>',
   'sem-telefone': '<span class="tag warn">sem telefone</span>',
   offline: '<span class="tag danger">bot offline</span>',
-  'limite-diario': '<span class="tag warn">limite da rodada</span>',
+  'limite-diario': '<span class="tag warn">limite</span>',
   erro: '<span class="tag danger">erro</span>',
 }
 
-function mostrarResultadoCobranca(resultados, simulado, reenviar = null) {
-  if (!resultados?.length) return toast('Nenhuma cobrança para enviar hoje.')
-  const corpo = `
-    <table><thead><tr><th>Pessoa</th><th class="num">Valor</th><th>Status</th></tr></thead><tbody>
-    ${resultados.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="num">${money(r.valor)}</td><td>${ROTULO[r.status] || esc(r.status)}</td></tr>`).join('')}
-    </tbody></table>
-    ${resultados.filter((r) => r.texto).map((r) => `
-      <h3 style="margin:18px 0 8px;font-size:13px">📄 Mensagem para ${esc(r.name)}</h3>
-      <div class="msg-preview">${esc(r.texto)}</div>`).join('')}`
-
+function resultadoCobranca(resultados, simulado, reenviar = null) {
+  if (!resultados?.length) return toast('Nenhuma cobrança para enviar.')
   const acoes = simulado && reenviar ? [{
-    label: '📤 Enviar de verdade', classe: 'danger', onClick: async ({ fechar, btn }) => {
-      if (!await confirmar('Enviar essas mensagens agora no WhatsApp?')) return
+    label: '📤 Enviar de verdade', classe: 'danger',
+    onClick: async ({ fechar, btn }) => {
+      if (!await confirmar('Enviar essas mensagens agora no WhatsApp?', 'Enviar')) return
       btn.disabled = true
       const r = await api('/cobrar', { body: { ...reenviar, real: true } })
-      fechar(); mostrarResultadoCobranca(r.resultados, false); render()
+      fechar(); setTimeout(() => resultadoCobranca(r.resultados, false), 200); render()
     },
   }] : []
 
-  modal({ titulo: simulado ? '🧪 Simulação — nada foi enviado' : '📤 Resultado do envio', corpo, acoes })
+  sheet({
+    titulo: simulado ? '🧪 Simulação' : '📤 Enviado',
+    corpo: `
+      ${simulado ? '<div class="banner warn">Nada foi enviado — isso é só a prévia.</div>' : '<div class="banner ok">Mensagens enviadas.</div>'}
+      <div class="rows">
+        ${resultados.map((r) => `<div class="row-item" style="cursor:default">
+          <span class="avatar">${esc(iniciais(r.name))}</span>
+          <span class="grow"><span class="t1">${esc(r.name)}</span><span class="t2">${money(r.valor)}</span></span>
+          ${ROTULO[r.status] || esc(r.status)}</div>`).join('')}
+      </div>
+      ${resultados.filter((r) => r.texto).map((r) => `
+        <h3 style="margin:18px 0 8px;font-size:13px">📄 Mensagem para ${esc(r.name)}</h3>
+        <div class="msg-preview">${esc(r.texto)}</div>`).join('')}`,
+    acoes,
+  })
 }
 
-async function verFaturas(cardKey) {
+function verFaturas(cardKey) {
   const c = S.cards.find((x) => x.key === cardKey)
-  const opts = c.competencias.map((k) => `<option value="${esc(k)}">${mesLongo(k)}</option>`).join('')
-  const { bg } = modal({
+  const { bg } = sheet({
     titulo: `Faturas — ${c.name}`,
-    corpo: `<div class="field"><label>Competência</label><select id="fvComp">${opts}</select></div><div id="fvBody"></div>`,
+    corpo: `<div class="field"><label>Competência</label>
+      <select id="fvComp">${c.competencias.map((k) => `<option value="${esc(k)}">${mesLongo(k)}</option>`).join('')}</select></div>
+      <div id="fvBody"></div>`,
   })
 
   const carregar = async () => {
-    const comp = $('#fvComp', bg).value
-    const f = await api(`/fatura?card=${encodeURIComponent(cardKey)}&comp=${encodeURIComponent(comp)}`)
+    const f = await api(`/fatura?card=${encodeURIComponent(cardKey)}&comp=${encodeURIComponent($('#fvComp', bg).value)}`)
     const nomes = Object.fromEntries(S.pessoas.map((p) => [p.key, p.name]))
     $('#fvBody', bg).innerHTML = `
-      <div class="grid g4" style="margin-bottom:14px">
-        <div class="kpi"><div class="lbl">Total</div><div class="val" style="font-size:20px">${money(f.total)}</div></div>
-        <div class="kpi ok"><div class="lbl">Recebido</div><div class="val" style="font-size:20px">${money(f.pago)}</div></div>
-        <div class="kpi warn"><div class="lbl">Em aberto</div><div class="val" style="font-size:20px">${money(f.aberto)}</div></div>
+      <div class="grid g2" style="margin-bottom:14px">
+        <div class="kpi"><div class="lbl">Total</div><div class="val">${money(f.total)}</div></div>
+        <div class="kpi warn"><div class="lbl">Em aberto</div><div class="val">${money(f.aberto)}</div></div>
       </div>
-      ${f.lancamentos.length ? `<table><thead><tr><th>Data</th><th>Pessoa</th><th>Obs</th><th class="num">Valor</th></tr></thead><tbody>
-        ${f.lancamentos.map((i) => `<tr><td class="mono muted">${dataBR(i.at)}</td>
-          <td><b>${esc(nomes[i.person] || i.person)}</b></td>
-          <td class="muted">${esc(i.note)}${i.parcela ? ` <span class="tag">${i.parcela.n}/${i.parcela.total}</span>` : ''}</td>
-          <td class="num">${money(i.value)}</td></tr>`).join('')}
-      </tbody></table>` : '<div class="empty">Nenhum lançamento nesta fatura.</div>'}`
+      <div class="rows">
+        ${f.lancamentos.length ? f.lancamentos.map((i) => `<div class="row-item" style="cursor:default">
+          <span class="avatar">${esc(iniciais(nomes[i.person] || i.person))}</span>
+          <span class="grow"><span class="t1">${esc(nomes[i.person] || i.person)}</span>
+          <span class="t2">${dataBR(i.at)}${i.note ? ' · ' + esc(i.note) : ''}${i.parcela ? ` · ${i.parcela.n}/${i.parcela.total}` : ''}</span></span>
+          <b class="v">${money(i.value)}</b></div>`).join('')
+          : '<div class="empty">Nenhum lançamento nesta fatura.</div>'}
+      </div>`
   }
-
   $('#fvComp', bg).onchange = carregar
   carregar()
 }
 
+// ---------- login ----------
+
+function telaLogin(erro = '') {
+  $('#topbar').style.display = 'none'
+  $('#tabbar').style.display = 'none'
+  $('#fab').style.display = 'none'
+  $('#main').innerHTML = `
+    <div style="min-height:78dvh;display:grid;place-items:center">
+      <div style="width:min(400px,100%);text-align:center">
+        <div style="font-size:46px;margin-bottom:8px">💳</div>
+        <h2 style="font-size:20px;font-weight:660;margin-bottom:4px">Painel Financeiro</h2>
+        <p class="muted" style="font-size:14px;margin-bottom:22px">Entre com a senha do painel</p>
+        ${erro ? `<div class="banner warn" style="text-align:left">⚠️ ${esc(erro)}</div>` : ''}
+        <div class="field"><input id="loginSenha" type="password" placeholder="senha" autocomplete="current-password" style="text-align:center"></div>
+        <button class="btn full" id="loginBtn">Entrar</button>
+        <p class="muted" style="font-size:12px;margin-top:16px;line-height:1.6">A senha aparece no log do bot ao iniciar,<br>ou no comando <code>/painel</code>.</p>
+      </div>
+    </div>`
+
+  const entrar = async () => {
+    const v = $('#loginSenha').value.trim()
+    if (!v) return
+    TOKEN = v
+    try {
+      S = await api('/state')
+      sessionStorage.setItem(CHAVE, TOKEN)
+      $('#topbar').style.display = ''
+      $('#tabbar').style.display = ''
+      $('#fab').style.display = ''
+      render()
+    } catch { /* api já reexibe a tela com o erro */ }
+  }
+  $('#loginBtn').onclick = entrar
+  $('#loginSenha').onkeydown = (e) => { if (e.key === 'Enter') entrar() }
+}
+
 // ---------- boot ----------
 
-document.querySelectorAll('.nav-item').forEach((b) => {
-  b.onclick = () => { TAB = b.dataset.tab; render() }
-})
+$$('#tabbar button').forEach((b) => { b.onclick = () => { vibrar(); TAB = b.dataset.tab; render() } })
+$('#fab').onclick = () => { vibrar(); formGasto() }
 
 window.addEventListener('unhandledrejection', (e) => toast(e.reason?.message || 'Erro inesperado', 'err'))
 
 if (!TOKEN) telaLogin()
 else api('/state').then((s) => { S = s; render() }).catch(() => {})
 
-// atualiza sozinho a cada 30s se não tiver modal aberto
-setInterval(async () => {
-  if ($('.modal-bg') || !TOKEN) return
+// atualiza sozinho quando volta pro app, e a cada 60s
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !TOKEN || $('.sheet-bg')) return
   try { S = await api('/state'); render() } catch {}
-}, 30_000)
+})
+setInterval(async () => {
+  if ($('.sheet-bg') || !TOKEN || document.hidden) return
+  try { S = await api('/state'); render() } catch {}
+}, 60_000)

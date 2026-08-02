@@ -2,33 +2,38 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f5f9" media="(prefers-color-scheme: light)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Financeiro">
   <title>Painel Financeiro</title>
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💳</text></svg>">
+  <link rel="apple-touch-icon" href="/icone.svg">
 </head>
 <body>
-  <div class="app">
-    <aside class="side">
-      <div class="brand">
-        <div class="logo">💳</div>
-        <div><b>Financeiro</b><span>controle de cartões</span></div>
-      </div>
-      <button class="nav-item on" data-tab="resumo"><span class="ic">📊</span> Resumo</button>
-      <button class="nav-item" data-tab="cartoes"><span class="ic">💳</span> Cartões</button>
-      <button class="nav-item" data-tab="pessoas"><span class="ic">👥</span> Pessoas</button>
-      <button class="nav-item" data-tab="lancar"><span class="ic">✍️</span> Lançar</button>
-      <button class="nav-item" data-tab="historico"><span class="ic">🧾</span> Histórico</button>
-      <button class="nav-item" data-tab="extratos"><span class="ic">🏦</span> Extratos</button>
-      <button class="nav-item" data-tab="config"><span class="ic">⚙️</span> Configurações</button>
-      <div class="side-foot">
-        <small id="statusBot">—</small>
-        <small id="statusCobranca">—</small>
-      </div>
-    </aside>
-    <main class="main" id="main"><div class="empty"><span class="big">⏳</span>Carregando…</div></main>
-  </div>
-  <div id="modalHost"></div>
+  <nav class="tabbar" id="tabbar">
+    <button class="on" data-tab="resumo"><span class="ic">📊</span>Resumo</button>
+    <button data-tab="cartoes"><span class="ic">💳</span>Cartões</button>
+    <button data-tab="pessoas"><span class="ic">👥</span>Pessoas</button>
+    <button data-tab="historico"><span class="ic">🧾</span>Histórico</button>
+    <button data-tab="mais"><span class="ic">⚙️</span>Mais</button>
+  </nav>
+
+  <header class="topbar" id="topbar">
+    <h1 id="tbTitulo">Resumo<span class="sub" id="tbSub">carregando…</span></h1>
+    <span class="status" id="tbStatus"></span>
+  </header>
+
+  <main id="main"><div class="empty"><span class="big">⏳</span>Carregando…</div></main>
+
+  <button class="fab" id="fab" aria-label="Lançar gasto">+</button>
+
+  <div id="sheetHost"></div>
   <div id="toastHost"></div>
   <script src="/app.js"></script>
 </body>

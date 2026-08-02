@@ -85,15 +85,18 @@ Todo dia às 09:00 o bot checa os vencimentos e dispara os lembretes em **D-5, D
 
 ### Painel web
 
-`/painel` devolve o link e a senha. Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
+`/painel` devolve o link e a senha. O painel é **feito para o celular**: navegação embaixo (no alcance do polegar), botão flutuante `+` para lançar um gasto em poucos toques, bottom sheets em vez de modais, e listas em vez de tabelas. No desktop a barra vira menu lateral.
 
-- **Resumo** — faturas abertas, a receber, próximo vencimento, evolução de 12 meses, divisão por cartão e por pessoa, parcelas comprometidas nos meses à frente
+Dá para **instalar como app**: abra no Chrome/Safari do celular e use *Adicionar à tela de início* — ele abre em tela cheia, sem barra de navegador.
+
+Tudo que dá pra fazer pelo WhatsApp dá pra fazer por lá — e mais:
+
+- **Resumo** — faturas abertas, a receber, próximo vencimento, evolução de 12 meses, divisão por cartão, parcelas comprometidas nos meses à frente
 - **Cartões** — fatura atual, uso do limite, quem deve o quê, cobrar, histórico de faturas
-- **Pessoas** — saldos, telefone, registrar pagamento
-- **Lançar** — um a um ou em lote, com prévia antes de gravar
-- **Histórico** — todos os lançamentos e pagamentos, com exclusão
-- **Extratos** — o que veio dos PDFs
-- **Configurações** — chave PIX e disparo manual dos lembretes
+- **Pessoas** — saldos e telefone; toque numa pessoa para ver o extrato dela e registrar pagamento (com atalhos "Tudo" e "Metade")
+- **Histórico** — lançamentos agrupados por dia; toque num item para ver detalhes ou excluir
+- **Mais** — lote, extratos dos PDFs, chave PIX e disparo manual dos lembretes
+- **Botão `+`** — valor, pessoa, cartão, parcelas e data selecionados por toque; mostra "3x de R$ 100,00" enquanto você digita
 
 A senha vai só no `sessionStorage` do navegador — nunca na URL — e a API bloqueia o IP por 15 minutos depois de 8 senhas erradas.
 
