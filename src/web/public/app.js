@@ -600,6 +600,27 @@ function mais() {
       </div>
     </div>
 
+    <div class="card"><h3>Avisos automáticos e backup</h3>
+      <div class="rows">
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Chat de avisos</span>
+          ${S.backup.temDestino ? '<span class="tag ok">marcado</span>' : '<span class="tag warn">nenhum</span>'}</div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Fechamento da fatura</span>
+          <span class="tag">no dia de cada cartão</span></div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Backup por WhatsApp</span>
+          <span class="tag">a cada ${S.backup.intervaloDias} dias</span></div>
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Próximo backup</span>
+          <b>${S.backup.diasAte <= 0 ? 'na próxima rotina' : `em ${S.backup.diasAte} dia(s)`}</b></div>
+        ${S.backup.ultimo ? `<div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Último enviado</span>
+          <b>${new Date(S.backup.ultimo).toLocaleDateString('pt-BR')}</b></div>` : ''}
+      </div>
+      ${!S.backup.temDestino ? '<div class="banner warn" style="margin-top:14px">📲 Mande <code>/relatorios</code> pro bot, no chat onde você quer receber a fatura fechada e o backup.</div>' : ''}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn ghost" data-acao="baixar-csv">📄 Baixar CSV</button>
+        <button class="btn ghost" data-acao="enviar-backup" ${S.backup.temDestino ? '' : 'disabled'}>💾 Enviar agora</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">Além disso, uma cópia local é guardada todo dia em <code>data/backups/</code>.</div>
+    </div>
+
     <div class="card"><h3>Extratos bancários <small>dos PDFs</small></h3>
       ${S.accounts.length ? S.accounts.map((a) => `
         <div style="margin-bottom:14px">
@@ -715,6 +736,24 @@ const acoes = {
     if (!await confirmar('Disparar agora os lembretes de hoje de verdade no WhatsApp?', 'Disparar')) return
     const r = await api('/lembretes', { body: { real: true } })
     resultadoCobranca(r.resultados, false); render()
+  },
+
+  'enviar-backup': async () => {
+    const r = await api('/backup', { body: {} })
+    if (r.ok) { toast('💾 Backup enviado no WhatsApp.'); render() }
+  },
+
+  'baixar-csv': async () => {
+    // baixa via fetch para a senha não precisar ir na URL
+    const res = await fetch('/api/export.csv', { headers: { 'x-token': TOKEN } })
+    if (!res.ok) return toast('Não consegui gerar o CSV.', 'err')
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `financeiro-${hojeISO()}.csv`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+    toast('📄 CSV baixado.')
   },
 
   'sair': () => { sessionStorage.removeItem(CHAVE); location.reload() },

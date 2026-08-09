@@ -18,13 +18,15 @@ const empty = () => ({
   reminders: [],
   // `eu` = chave da pessoa que é o dono do cartão (você). Os gastos dela não
   // entram em "a receber" e ela nunca é cobrada.
-  settings: { pix: '', pixNome: '', eu: '' },
+  // donoJid = chat que recebe fechamento de fatura e backup. ultimoBackup = ISO.
+  settings: { pix: '', pixNome: '', eu: '', donoJid: '', ultimoBackup: '' },
 })
 
 let db = empty()
 let saving = Promise.resolve()
 
-export const money = (v) => `R$ ${Number(v || 0).toFixed(2).replace('.', ',')}`
+export const money = (v) =>
+  `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 export const key = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 const num = (v) => Number(String(v ?? '').replace(',', '.')) || 0
 const id = () => randomUUID()

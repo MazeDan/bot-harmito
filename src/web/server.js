@@ -4,7 +4,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
-import { cobrar, montarMensagemPessoa, montarResumoFatura, rodarLembretes } from '../lib/cobranca.js'
+import { cobrar, montarMensagemPessoa, montarResumoFatura, rodarFechamentos, rodarLembretes } from '../lib/cobranca.js'
+import { diasAteProximoBackup, enviarBackup, gerarCSV, snapshotDiario } from '../lib/backup.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
@@ -102,6 +103,13 @@ function montarEstado() {
     minhaParte: fin.minhaParte(),
     online: isOnline(),
     cobranca: { dryRun: config.cobranca.dryRun, ativo: config.cobranca.ativo, horario: config.cobranca.horario },
+    backup: {
+      ativo: config.backup.ativo,
+      intervaloDias: config.backup.intervaloDias,
+      diasAte: diasAteProximoBackup(),
+      ultimo: fin.getSettings().ultimoBackup || null,
+      temDestino: Boolean(fin.getSettings().donoJid),
+    },
     settings: fin.getSettings(),
     cards,
     pessoas,
@@ -230,6 +238,27 @@ async function api(req, res, url) {
   if (p.startsWith('/accounts/') && m === 'DELETE') {
     await fin.deleteAccount(decodeURIComponent(p.slice(10)))
     return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- backup e fechamento ---
+  if (p === '/backup' && m === 'POST') {
+    await snapshotDiario()
+    const r = await enviarBackup({ forcado: true })
+    if (r.erro) return json(res, 400, r)
+    return json(res, 200, { ...r, state: montarEstado() })
+  }
+  if (p === '/export.csv' && m === 'GET') {
+    const csv = gerarCSV()
+    res.writeHead(200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="financeiro-${new Date().toISOString().slice(0, 10)}.csv"`,
+    })
+    return res.end(csv)
+  }
+  if (p === '/fechamento' && m === 'POST') {
+    const r = await rodarFechamentos({ forcarCartao: fin.key(body.card) })
+    if (!r.length) return json(res, 400, { erro: 'Esse cartão não tem dia de fechamento cadastrado.' })
+    return json(res, 200, { resultado: r[0], state: montarEstado() })
   }
 
   // --- textos prontos para copiar ---

@@ -4,6 +4,7 @@ import {
   markReminder, money, reminderSent, souEu,
 } from './finance.js'
 import { sendText, isOnline } from './wa.js'
+import { diasAteProximoBackup, enviarBackup, snapshotDiario } from './backup.js'
 
 const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 const mesBR = (ym) => {
@@ -147,6 +148,57 @@ export async function cobrar(cardName, { competencia = null, dryRun = config.cob
   }
 }
 
+/**
+ * No dia do fechamento de cada cartão, manda para você a fatura que acabou
+ * de fechar — com o total, quem deve o quê e a sua parte.
+ */
+export async function rodarFechamentos({ hoje = new Date(), forcarCartao = null } = {}) {
+  const s = getSettings()
+  const enviados = []
+
+  for (const card of listCards()) {
+    if (!card.fechamento) continue
+    const ehHoje = hoje.getDate() === card.fechamento
+    if (!ehHoje && forcarCartao !== card.key) continue
+
+    // compras até o dia do fechamento caem na fatura do mês corrente
+    const comp = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+    if (!forcarCartao && reminderSent(card.key, '__fechamento', comp, 'fechamento')) continue
+
+    const f = faturaOf(card.key, comp)
+    if (!f) continue
+
+    const minha = f.pessoas.find((p) => souEu(p.person))
+    const venc = f.vencimento ? new Date(f.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : null
+
+    let txt = `🔒 *Fechou a fatura do ${card.name}*\n📅 ${mesBR(comp)}`
+    if (venc) txt += ` · vence em *${venc}*`
+    txt += `\n\n💸 Total: *${money(f.total)}*\n`
+    if (minha) txt += `🫵 Sua parte: *${money(minha.aberto)}*\n`
+    const outros = f.pessoas.filter((p) => !souEu(p.person))
+    if (outros.length) {
+      txt += `👥 Dos outros: *${money(outros.reduce((sum, p) => sum + p.aberto, 0))}*\n\n`
+      txt += outros.map((p) => `▸ ${p.name}: ${money(p.aberto)}${p.pago ? ` _(pagou ${money(p.pago)})_` : ''}`).join('\n')
+    }
+    if (card.limite) txt += `\n\n💳 Usou ${Math.round((f.total / card.limite) * 100)}% do limite de ${money(card.limite)}`
+    txt += `\n\n_Cobre o pessoal com_ \`/cobrar ${card.key}\`_._`
+
+    if (!s.donoJid) { enviados.push({ card: card.name, status: 'sem-destino', texto: txt }); continue }
+    if (!isOnline()) { enviados.push({ card: card.name, status: 'offline', texto: txt }); continue }
+
+    try {
+      await sendText(s.donoJid, txt)
+      if (!forcarCartao) await markReminder(card.key, '__fechamento', comp, 'fechamento')
+      enviados.push({ card: card.name, status: 'enviado', total: f.total, texto: txt })
+    } catch (err) {
+      enviados.push({ card: card.name, status: 'erro', erro: err.message, texto: txt })
+    }
+  }
+
+  if (enviados.length) console.log('🔒 Fechamentos:', enviados.map((e) => `${e.card}[${e.status}]`).join(', '))
+  return enviados
+}
+
 /** Qual gatilho (se algum) se aplica hoje a uma fatura */
 function gatilho(dias) {
   if (dias === 5) return 'D-5'
@@ -183,10 +235,30 @@ export async function rodarLembretes({ dryRun = config.cobranca.dryRun } = {}) {
 
 let timer = null
 
-/** Agenda a checagem diária no horário configurado */
+/**
+ * A rotina diária: backup local, fatura que fechou, backup por WhatsApp
+ * quando vence o intervalo, e por fim os lembretes de cobrança.
+ */
+export async function rotinaDiaria() {
+  const passos = [
+    ['backup local', () => snapshotDiario()],
+    ['fechamentos', () => rodarFechamentos()],
+    ['backup por WhatsApp', async () => {
+      if (!config.backup.ativo || diasAteProximoBackup() > 0) return null
+      return enviarBackup()
+    }],
+    ['lembretes', () => rodarLembretes()],
+  ]
+
+  for (const [nome, fn] of passos) {
+    try { await fn() } catch (e) { console.error(`Erro na rotina diária (${nome}):`, e.message) }
+  }
+}
+
+/** Agenda a rotina diária no horário configurado */
 export function iniciarAgendador() {
   if (!config.cobranca.ativo) {
-    console.log('🔕 Agendador de cobrança desligado (config.cobranca.ativo = false).')
+    console.log('🔕 Agendador desligado (config.cobranca.ativo = false).')
     return
   }
   const [hh, mm] = config.cobranca.horario.split(':').map(Number)
@@ -195,13 +267,12 @@ export function iniciarAgendador() {
     const agora = new Date()
     const alvo = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), hh, mm, 0)
     if (alvo <= agora) alvo.setDate(alvo.getDate() + 1)
-    const ms = alvo - agora
     timer = setTimeout(async () => {
-      try { await rodarLembretes() } catch (e) { console.error('Erro nos lembretes:', e) }
+      await rotinaDiaria()
       agendar()
-    }, ms)
+    }, alvo - agora)
     timer.unref?.()
-    console.log(`⏰ Próxima checagem de cobrança: ${alvo.toLocaleString('pt-BR')}${config.cobranca.dryRun ? ' (modo simulação)' : ''}`)
+    console.log(`⏰ Próxima rotina diária: ${alvo.toLocaleString('pt-BR')}${config.cobranca.dryRun ? ' (cobrança em simulação)' : ''}`)
   }
   agendar()
 }

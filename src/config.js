@@ -47,4 +47,13 @@ export const config = {
     maxPorRodada: Number(process.env.COBRANCA_MAX || 20),
     intervaloMs: [8_000, 20_000],
   },
+
+  // Backup dos dados financeiros
+  backup: {
+    ativo: process.env.BACKUP_ATIVO !== '0',
+    // Cópia local todo dia; envio pelo WhatsApp a cada N dias
+    intervaloDias: Number(process.env.BACKUP_DIAS || 15),
+    // Quantas cópias locais guardar (data/backups/)
+    manterDias: Number(process.env.BACKUP_MANTER || 30),
+  },
 }

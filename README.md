@@ -19,6 +19,7 @@ Na primeira vez, vai aparecer um **QR code no terminal** — escaneie com o What
 | `/fig` (ou `/s`) | Envie uma imagem/vídeo/gif com essa legenda, ou responda a uma mídia — vira figurinha (estática ou animada) |
 | `/roubar` | Responda a uma figurinha — ela volta com o pack do bot |
 | `/toimg` | Responda a uma figurinha — vira imagem (ou gif, se animada) |
+| `/audio` | Responda a um vídeo — devolve o áudio em mp3. `/audio voz` manda como mensagem de voz; `/audio 0:10 0:35` corta o trecho |
 | `/dado` | Joga um dado (`/dado 20` para d20) |
 | `/moeda` | Cara ou coroa |
 | `/ppt pedra` | Pedra, papel e tesoura contra o bot |
@@ -80,8 +81,22 @@ O bot mostra a prévia com o total e só grava depois do `/confirmar` (ou `/canc
 | `/eu` | Mostra quanto da fatura de cada cartão é seu, item a item |
 | `/cobrar nubank` | **Simula** a cobrança e te mostra as mensagens |
 | `/cobrar nubank real` | Envia de verdade |
+| `/relatorios` | Marca **este chat** para receber os avisos automáticos |
+| `/fechamento nubank` | Prévia do aviso de fatura fechada |
+| `/backup` | Manda o backup agora (.json e .csv) |
 
 Todo dia às 09:00 o bot checa os vencimentos e dispara os lembretes em **D-5, D-2, D-0 e D+1** (cada um só uma vez por fatura). A mensagem sai com o extrato do que a pessoa comprou, o total, a data de vencimento e sua chave PIX.
+
+### Fechamento da fatura e backup
+
+Mande **`/relatorios`** no chat onde você quer ser avisado (o seu próprio, por exemplo). A partir daí, na mesma rotina diária:
+
+- **No dia do fechamento de cada cartão**, você recebe a fatura que acabou de fechar: total, quanto é a sua parte, quanto é dos outros pessoa a pessoa, e o quanto do limite foi usado. Uma vez por fatura.
+- **A cada 15 dias**, o backup dos seus dados chega no WhatsApp em dois arquivos: o `.json` (para restaurar) e o `.csv` (para abrir no Excel).
+
+Independente disso, **uma cópia local é feita todo dia** em `data/backups/`, guardando os últimos 30 dias. No painel, aba *Mais*, dá para baixar o CSV na hora ou forçar o envio.
+
+Ajuste com `BACKUP_DIAS` (padrão 15), `BACKUP_MANTER` (padrão 30) e `BACKUP_ATIVO=0`.
 
 > ⚠️ Por padrão a cobrança roda em **modo simulação** — nada é enviado. Confira as mensagens antes e só então suba com `COBRANCA_REAL=1`. Disparar mensagens para números que nunca te escreveram é o jeito mais rápido de tomar ban no WhatsApp. O bot já envia com intervalo aleatório e teto por rodada.
 
