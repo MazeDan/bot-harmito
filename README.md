@@ -47,7 +47,7 @@ Prefixos aceitos: `/`, `!` e `.`
 
 | Comando | O que faz |
 |---|---|
-| `/fig` (ou `/s`) | Imagem/vídeo/gif com essa legenda, ou responda a uma mídia — vira figurinha |
+| `/f` (ou `/fig`, `/s`) | Imagem/vídeo/gif com essa legenda, ou responda a uma mídia — vira figurinha. Manda **duas**: a *inteira* (proporção original, nada cortado) e a *quadrada* (512×512, recortada no centro). `/f i` ou `/f q` manda só uma |
 | `/roubar` · `/toimg` | Figurinha com o pack do bot · figurinha vira imagem/gif |
 | `/audio` | Responda a um vídeo — devolve o mp3. `/audio voz` manda como mensagem de voz; `/audio 0:10 0:35` corta o trecho |
 
@@ -100,7 +100,7 @@ O bot controla **quem comprou em qual cartão**, calcula a **fatura certa** de c
 | `/cartao edit nubank vence 12` | Edita (só o que você informar) |
 | `/cartao del nubank` | Remove (os gastos ficam sem cartão) |
 | `/cartoes` | Lista os cartões com a fatura atual e dias até o vencimento |
-| `/fatura nubank [2026-09]` | Detalha a fatura, quebrada por pessoa |
+| `/fatura nubank [2026-09]` (ou `/fat`) | Detalha a fatura, quebrada por pessoa |
 
 O **dia de fechamento** é o que faz a mágica: compra feita **depois** dele já entra na fatura do mês seguinte, automaticamente.
 

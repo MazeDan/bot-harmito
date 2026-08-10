@@ -9,7 +9,8 @@ const mesBR = (ym) => {
 
 export default {
   name: 'fatura',
-  aliases: ['f'],
+  // '/f' ficou para as figurinhas, que é o uso mais frequente
+  aliases: ['fat'],
   description: 'Detalha a fatura de um cartão: /fatura nubank [2026-09]',
   categoria: 'financeiro',
   dono: true,

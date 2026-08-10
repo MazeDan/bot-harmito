@@ -8,17 +8,38 @@ import sharp from 'sharp'
 import { config } from '../config.js'
 
 /**
- * Converte uma imagem (jpg/png/webp) em figurinha estática 512x512 com fundo transparente.
+ * Duas formas de recortar:
+ *  - 'quadrada' → 512x512 preenchido, cortando o que sobra nas bordas
+ *  - 'inteira'  → mantém a proporção original, maior lado em 512, sem cortar
  */
-export async function imageToSticker(buffer) {
-  const webp = await sharp(buffer)
-    .resize(512, 512, {
-      fit: 'contain',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .webp({ quality: 90 })
-    .toBuffer()
+export const MODOS = ['quadrada', 'inteira']
 
+/** Foto muito perto de um quadrado? Aí as duas versões dariam quase igual. */
+export const quaseQuadrada = (largura, altura) => {
+  if (!largura || !altura) return false
+  const r = largura / altura
+  return r > 0.95 && r < 1.05
+}
+
+/** Dimensões da imagem, para decidir se vale mandar as duas versões */
+export async function dimensoesImagem(buffer) {
+  const { width, height, pages } = await sharp(buffer).metadata()
+  return { largura: width ?? 0, altura: height ?? 0, animada: (pages ?? 1) > 1 }
+}
+
+/**
+ * Converte uma imagem (jpg/png/webp) em figurinha.
+ */
+export async function imageToSticker(buffer, { modo = 'quadrada' } = {}) {
+  const img = sharp(buffer)
+
+  const redimensionada = modo === 'inteira'
+    // 'inside' encolhe até caber em 512, mantendo a proporção e sem preencher nada
+    ? img.resize(512, 512, { fit: 'inside', withoutEnlargement: false })
+    // 'cover' preenche o quadrado e corta o excedente, centralizado
+    : img.resize(512, 512, { fit: 'cover', position: 'centre' })
+
+  const webp = await redimensionada.webp({ quality: 90 }).toBuffer()
   return addExif(webp)
 }
 
@@ -34,7 +55,7 @@ export async function rebrandSticker(webpBuffer) {
  * Converte vídeo/gif em figurinha animada (webp animado 512x512).
  * Tenta com qualidade alta e vai reduzindo até caber no limite de tamanho.
  */
-export async function videoToSticker(buffer) {
+export async function videoToSticker(buffer, { modo = 'quadrada' } = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'sticker-'))
   const input = path.join(dir, `in-${randomBytes(4).toString('hex')}`)
 
@@ -50,8 +71,8 @@ export async function videoToSticker(buffer) {
     ]
 
     for (const [quality, fps] of attempts) {
-      const output = path.join(dir, `out-${quality}.webp`)
-      await convertToAnimatedWebp(input, output, quality, fps)
+      const output = path.join(dir, `out-${modo}-${quality}.webp`)
+      await convertToAnimatedWebp(input, output, quality, fps, modo)
       const webp = await readFile(output)
       if (webp.length <= config.sticker.maxBytes) {
         return addExif(webp)
@@ -64,14 +85,32 @@ export async function videoToSticker(buffer) {
   }
 }
 
-function convertToAnimatedWebp(input, output, quality, fps) {
+/** Largura e altura do vídeo, sem depender de baixar tudo de novo */
+export function dimensoesVideo(caminho) {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(caminho, (err, dados) => {
+      if (err) return resolve({ largura: 0, altura: 0 })
+      const v = (dados?.streams ?? []).find((s) => s.codec_type === 'video')
+      resolve({ largura: v?.width ?? 0, altura: v?.height ?? 0 })
+    })
+  })
+}
+
+/** Mesma escolha de recorte da imagem, agora em filtro do ffmpeg */
+const filtroEscala = (modo) =>
+  modo === 'inteira'
+    // encolhe até caber em 512 no maior lado, sem preencher nem cortar
+    ? 'scale=512:512:force_original_aspect_ratio=decrease'
+    // aumenta até cobrir o quadrado e corta o excedente, centralizado
+    : 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512'
+
+function convertToAnimatedWebp(input, output, quality, fps, modo = 'quadrada') {
   return new Promise((resolve, reject) => {
     ffmpeg(input)
       .inputOptions(['-t', String(config.sticker.maxVideoSeconds)])
       .outputOptions([
         '-vcodec', 'libwebp',
-        '-vf',
-        `scale=512:512:force_original_aspect_ratio=decrease,fps=${fps},pad=512:512:-1:-1:color=0x00000000`,
+        '-vf', `${filtroEscala(modo)},fps=${fps}`,
         '-loop', '0',
         '-an',
         '-q:v', String(quality),

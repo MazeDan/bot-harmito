@@ -10,6 +10,9 @@ export const config = {
     maxVideoSeconds: 8,
     // Tamanho máximo do arquivo final (WhatsApp rejeita stickers animados grandes)
     maxBytes: 1_000_000,
+    // Manda duas figurinhas: a inteira (proporção original) e a quadrada.
+    // Se a mídia já for quadrada, sai só uma — seriam idênticas.
+    duasVersoes: process.env.FIG_DUAS !== '0',
   },
 
   // Limite de uso por usuário: N comandos por janela de tempo
