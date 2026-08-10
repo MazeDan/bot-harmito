@@ -4,8 +4,8 @@ export const config = {
 
   // Metadados que aparecem na figurinha (nome do pack e autor)
   sticker: {
-    packname: 'Calciffer Fig',
-    author: 'Calciffer',
+    packname: 'Harmito Figs',
+    author: 'Harmito',
     // Duração máxima de vídeo/gif convertido (segundos)
     maxVideoSeconds: 8,
     // Tamanho máximo do arquivo final (WhatsApp rejeita stickers animados grandes)
