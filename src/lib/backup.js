@@ -3,6 +3,7 @@ import { copyFile, readdir, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
+import { AGENDA_FILE } from './agenda.js'
 import { getCard, getPerson, getSettings, raw, setSettings } from './finance.js'
 import { getSock, isOnline, sendText } from './wa.js'
 
@@ -18,22 +19,26 @@ const hojeISO = () => new Date().toISOString().slice(0, 10)
  * É a rede de segurança de verdade — o envio pelo WhatsApp é conveniência.
  */
 export async function snapshotDiario() {
-  if (!existsSync(FILE)) return null
   mkdirSync(BACKUP_DIR, { recursive: true })
+  const feitos = []
 
-  const destino = path.join(BACKUP_DIR, `finance-${hojeISO()}.json`)
-  if (existsSync(destino)) return destino // já fez hoje
+  for (const [prefixo, origem] of [['finance', FILE], ['agenda', AGENDA_FILE]]) {
+    if (!existsSync(origem)) continue
+    const destino = path.join(BACKUP_DIR, `${prefixo}-${hojeISO()}.json`)
+    if (!existsSync(destino)) {
+      await copyFile(origem, destino)
+      feitos.push(path.basename(destino))
+    }
 
-  await copyFile(FILE, destino)
-
-  // rotaciona: mantém só os mais recentes
-  const arquivos = (await readdir(BACKUP_DIR)).filter((f) => f.startsWith('finance-')).sort()
-  for (const velho of arquivos.slice(0, -config.backup.manterDias)) {
-    await unlink(path.join(BACKUP_DIR, velho)).catch(() => {})
+    // rotaciona: mantém só as cópias mais recentes de cada arquivo
+    const arquivos = (await readdir(BACKUP_DIR)).filter((f) => f.startsWith(`${prefixo}-`)).sort()
+    for (const velho of arquivos.slice(0, -config.backup.manterDias)) {
+      await unlink(path.join(BACKUP_DIR, velho)).catch(() => {})
+    }
   }
 
-  console.log(`💾 Backup local: ${path.basename(destino)} (${arquivos.length} guardados)`)
-  return destino
+  if (feitos.length) console.log(`💾 Backup local: ${feitos.join(', ')}`)
+  return feitos
 }
 
 /** Planilha de todos os lançamentos e pagamentos, pronta pro Excel */
@@ -99,6 +104,11 @@ export async function enviarBackup({ forcado = false } = {}) {
   await sock.sendMessage(s.donoJid, {
     document: csv, mimetype: 'text/csv', fileName: `financeiro-${data}.csv`,
   })
+  if (existsSync(AGENDA_FILE)) {
+    await sock.sendMessage(s.donoJid, {
+      document: readFileSync(AGENDA_FILE), mimetype: 'application/json', fileName: `agenda-${data}.json`,
+    })
+  }
 
   await setSettings({ ultimoBackup: new Date().toISOString() })
   console.log(`💾 Backup enviado para ${s.donoJid}`)

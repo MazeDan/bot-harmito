@@ -72,17 +72,26 @@ main {
   background: color-mix(in srgb, var(--bg-2) 92%, transparent);
   backdrop-filter: saturate(160%) blur(14px);
   border-top: 1px solid var(--line);
-  padding: 6px 4px calc(var(--safe-b) + 6px);
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  padding: 6px 2px calc(var(--safe-b) + 6px);
+  display: grid; grid-template-columns: repeat(6, 1fr);
 }
 .tabbar button {
   background: none; border: none; color: var(--txt-3); cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 2px; font: inherit; font-size: 10.5px; font-weight: 600;
+  padding: 6px 1px; font: inherit; font-size: 9.5px; font-weight: 600;
   border-radius: 12px; min-height: 48px; transition: color .15s;
+  position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tabbar button .ic { font-size: 19px; line-height: 1; }
+.tabbar button .ic { font-size: 18px; line-height: 1; }
 .tabbar button.on { color: var(--accent-2); }
+
+/* bolinha de pendências na aba Agenda */
+.badge {
+  position: absolute; top: 3px; right: 50%; margin-right: -18px;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px;
+  background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
 
 .fab {
   position: fixed; right: 18px; bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px); z-index: 31;
@@ -138,6 +147,22 @@ main {
 .row-item .v { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px; white-space: nowrap; }
 .row-item .v small { display: block; font-size: 11px; font-weight: 500; color: var(--txt-3); text-align: right; margin-top: 2px; }
 .row-item .chev { color: var(--txt-3); font-size: 17px; }
+
+/* item da agenda: círculo de concluir + texto */
+.check {
+  width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%;
+  border: 2px solid var(--line); background: none; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; color: transparent;
+  transition: all .15s;
+}
+.check:active { transform: scale(.88) }
+.check.on { background: var(--ok); border-color: var(--ok); color: #06281a; }
+.item-feito .t1 { text-decoration: line-through; color: var(--txt-3); }
+.hora-chip {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 700;
+  font-size: 13px; color: var(--accent-2); min-width: 42px;
+}
+.hora-chip.vazia { color: var(--txt-3); font-weight: 500; }
 
 .avatar {
   width: 38px; height: 38px; border-radius: 12px; flex: 0 0 auto;
@@ -327,6 +352,7 @@ svg text { fill: var(--txt-3); font-family: inherit; }
     font-size: 14px; padding: 11px 13px; min-height: 44px;
   }
   .tabbar button .ic { font-size: 17px; width: 20px; text-align: center; }
+  .badge { position: static; margin: 0 0 0 auto; }
   .tabbar button:hover { background: var(--card); color: var(--txt); }
   .tabbar button.on { background: var(--accent); color: #fff; }
 

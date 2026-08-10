@@ -6,8 +6,10 @@ import makeWASocket, {
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { handleMessage, loadCommands } from './handler.js'
+import { initAgenda } from './lib/agenda.js'
 import { iniciarAgendador } from './lib/cobranca.js'
 import { initFinance } from './lib/finance.js'
+import { iniciarAgendaScheduler } from './lib/lembretes.js'
 import { setSock } from './lib/wa.js'
 import { iniciarPainel } from './web/server.js'
 
@@ -56,7 +58,9 @@ async function start() {
 }
 
 initFinance()
+initAgenda()
 await loadCommands()
 iniciarPainel()
 iniciarAgendador()
+iniciarAgendaScheduler()
 await start()

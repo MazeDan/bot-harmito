@@ -227,6 +227,11 @@ function donut(fatias) {
 
 const TITULOS = {
   resumo: ['Resumo', () => `Fatura de ${mesLongo(S.resumo.competencia)}`],
+  agenda: ['Agenda', () => {
+    const n = S.agenda.numeros
+    if (n.atrasados) return `${n.pendentesHoje} hoje · ${n.atrasados} atrasado(s)`
+    return n.pendentesHoje ? `${n.pendentesHoje} pendente(s) hoje` : 'tudo em dia'
+  }],
   cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
   pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => !p.eu && p.saldo > 0.009).length} devendo`],
   historico: ['Histórico', () => {
@@ -245,7 +250,17 @@ function render({ manterScroll = false } = {}) {
   $('#tbTitulo').innerHTML = `${titulo}<span class="sub">${esc(sub())}</span>`
   $('#tbStatus').innerHTML = S.online ? '🟢 online' : '🔴 offline'
   $$('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === TAB))
-  $('#main').innerHTML = ({ resumo, cartoes, pessoas, historico, mais })[TAB]()
+
+  // bolinha com as pendências de hoje + atrasados
+  const pend = S.agenda.numeros.pendentesHoje + S.agenda.numeros.atrasados
+  const badge = $('#badgeAgenda')
+  badge.hidden = !pend
+  badge.textContent = pend > 9 ? '9+' : String(pend)
+
+  // o botão flutuante muda de função conforme a aba
+  $('#fab').textContent = TAB === 'agenda' ? '📝' : '+'
+
+  $('#main').innerHTML = ({ resumo, agenda, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   ligarCopia()
   window.scrollTo(0, manterScroll ? y : 0)
@@ -279,6 +294,8 @@ function resumo() {
       <div class="kpi ${classe}"><div class="lbl">Vence em</div><div class="val">${prox ? (dias > 0 ? dias + 'd' : dias === 0 ? 'hoje' : 'venceu') : '—'}</div><div class="sub">${prox ? esc(prox.name) : 'sem vencimento'}</div></div>
     </div>
 
+    ${cardHoje()}
+
     ${cardMinhaParte()}
 
     ${devedores.length ? `<div class="card">
@@ -303,6 +320,100 @@ function resumo() {
     ${S.futuro.length ? `<div class="card"><h3>Parcelas a vencer <small>meses à frente</small></h3>
       ${barChart(S.futuro.map((f) => ({ rotulo: mesBR(f.competencia), valor: f.total })), { altura: 130 })}</div>` : ''}
   `
+}
+
+// ---------- agenda ----------
+
+const RECORRENCIA = {
+  diaria: 'todo dia', uteis: 'seg a sex',
+  semanal: (d) => `toda ${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][d]}`,
+  mensal: (d) => `todo dia ${d}`,
+}
+const descreverRec = (r) => {
+  if (!r) return ''
+  const v = RECORRENCIA[r.tipo]
+  return typeof v === 'function' ? v(Number(r.dia)) : v || ''
+}
+
+const rotuloDia = (dataISO) => {
+  const hoje = S.agenda.hoje
+  if (dataISO === hoje) return 'Hoje'
+  const d = new Date(dataISO + 'T12:00:00')
+  const amanha = new Date(hoje + 'T12:00:00'); amanha.setDate(amanha.getDate() + 1)
+  if (dataISO === `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, '0')}-${String(amanha.getDate()).padStart(2, '0')}`) return 'Amanhã'
+  const semana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][d.getDay()]
+  return `${semana}, ${String(d.getDate()).padStart(2, '0')}/${MESES[d.getMonth()]}`
+}
+
+/** Uma linha de agenda com o círculo de concluir */
+function linhaAgenda(i, dataISO) {
+  return `<div class="row-item ${i.feito ? 'item-feito' : ''}" style="cursor:default">
+    <button class="check ${i.feito ? 'on' : ''}" data-acao="toggle-feito" data-num="${i.num}" data-data="${esc(dataISO)}" data-feito="${i.feito ? 1 : 0}" aria-label="Concluir">✓</button>
+    <span class="hora-chip ${i.hora ? '' : 'vazia'}">${i.hora || '—'}</span>
+    <button class="grow" data-acao="editar-agenda" data-num="${i.num}" style="background:none;border:none;text-align:left;color:inherit;font:inherit;padding:0;min-width:0">
+      <span class="t1">${esc(i.texto)}</span>
+      ${i.recorrencia ? `<span class="t2">🔁 ${esc(descreverRec(i.recorrencia))}</span>` : ''}
+    </button>
+    <span class="muted" style="font-size:11px">#${i.num}</span>
+  </div>`
+}
+
+function agenda() {
+  const { dias, atrasados, numeros } = S.agenda
+  const comAlgo = dias.filter((d) => d.itens.length)
+
+  if (!comAlgo.length && !atrasados.length) {
+    return `<div class="card"><div class="empty"><span class="big">📅</span>
+      Nada anotado ainda.<br>Toque no <b>📝</b> para adicionar.</div>
+      <button class="btn full" data-acao="novo-lembrete">📝 Anotar algo</button></div>`
+  }
+
+  const blocos = comAlgo.map((d) => {
+    const pend = d.itens.filter((i) => !i.feito).length
+    return `<div class="card">
+      <h3>${esc(rotuloDia(d.data))}
+        <span class="push muted" style="font-weight:600;font-size:12px">${pend ? `${pend} pendente(s)` : '✅ tudo feito'}</span>
+      </h3>
+      <div class="rows">${d.itens.map((i) => linhaAgenda(i, d.data)).join('')}</div>
+    </div>`
+  }).join('')
+
+  return `
+    ${atrasados.length ? `<div class="card" style="border-color:rgba(255,90,106,.4)">
+      <h3>⚠️ Ficou pra trás <span class="push muted" style="font-weight:600;font-size:12px">${atrasados.length}</span></h3>
+      <div class="rows">${atrasados.map((i) => linhaAgenda(i, i.data)).join('')}</div>
+    </div>` : ''}
+
+    <div class="grid g2">
+      <div class="kpi ${numeros.pendentesHoje ? '' : 'ok'}"><div class="lbl">Hoje</div><div class="val">${numeros.pendentesHoje}</div><div class="sub">de ${numeros.hoje} item(ns)</div></div>
+      <div class="kpi ${numeros.atrasados ? 'danger' : 'ok'}"><div class="lbl">Atrasados</div><div class="val">${numeros.atrasados}</div><div class="sub">${numeros.total} no total</div></div>
+    </div>
+
+    ${blocos}
+
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn ghost" data-acao="copiar-agenda">📋 Copiar o dia</button>
+      <button class="btn ghost" data-acao="copiar-semana">📋 Copiar a semana</button>
+    </div>`
+}
+
+/** Bloco "Hoje" no topo do Resumo */
+function cardHoje() {
+  const hoje = S.agenda.dias.find((d) => d.data === S.agenda.hoje)
+  const atrasados = S.agenda.atrasados
+  const pend = (hoje?.itens ?? []).filter((i) => !i.feito)
+  if (!pend.length && !atrasados.length) return ''
+
+  return `<div class="card" style="border-color:rgba(124,92,255,.4)">
+    <h3>📅 Hoje
+      <button class="btn ghost sm push" data-acao="ir-agenda">Ver agenda ›</button>
+    </h3>
+    <div class="rows">
+      ${pend.slice(0, 5).map((i) => linhaAgenda(i, S.agenda.hoje)).join('')}
+      ${atrasados.slice(0, 3).map((i) => linhaAgenda(i, i.data)).join('')}
+    </div>
+    ${pend.length > 5 || atrasados.length > 3 ? '<div class="muted" style="font-size:12px;margin-top:8px">…e mais. Veja tudo na aba Agenda.</div>' : ''}
+  </div>`
 }
 
 /** "Quanto EU tenho que pagar" — a sua fatia de cada fatura */
@@ -738,6 +849,26 @@ const acoes = {
     resultadoCobranca(r.resultados, false); render()
   },
 
+  // --- agenda ---
+  'ir-agenda': () => { TAB = 'agenda'; render() },
+  'novo-lembrete': () => formLembrete(),
+  'editar-agenda': ({ num }) => formLembrete(Number(num)),
+
+  'toggle-feito': async ({ num, data, feito }) => {
+    await api(`/agenda/${num}`, { method: 'PATCH', body: { feito: feito !== '1', data } })
+    render({ manterScroll: true })
+  },
+
+  'copiar-agenda': async () => {
+    const r = await api('/agenda/resumos')
+    copiar(r.dia, 'Agenda do dia copiada!')
+  },
+
+  'copiar-semana': async () => {
+    const r = await api('/agenda/resumos')
+    copiar(r.semana, 'Semana copiada!')
+  },
+
   'enviar-backup': async () => {
     const r = await api('/backup', { body: {} })
     if (r.ok) { toast('💾 Backup enviado no WhatsApp.'); render() }
@@ -862,6 +993,117 @@ function formGasto() {
     $('#gPorParcela', bg).textContent = n > 1 && v ? `${n}x de ${money(v / n)} — uma por fatura` : ''
   }
   $('#gValor', bg).oninput = mostrarParcela
+}
+
+/**
+ * Novo lembrete (frase solta, igual ao WhatsApp) ou edição de um existente.
+ * A prévia mostra como o bot entendeu antes de salvar.
+ */
+function formLembrete(num = null) {
+  const item = num ? [...S.agenda.dias.flatMap((d) => d.itens), ...S.agenda.atrasados].find((i) => i.num === num) : null
+
+  const corpo = item
+    ? `
+      <div class="field"><label>O quê</label><input id="lbTexto" value="${esc(item.texto)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Data</label><input id="lbData" type="date" value="${esc(item.data || '')}" ${item.recorrencia ? 'disabled' : ''}></div>
+        <div class="field"><label>Hora</label><input id="lbHora" type="time" value="${esc(item.hora || '')}"></div>
+      </div>
+      ${item.recorrencia ? `<div class="banner info">🔁 Se repete: <b>${esc(descreverRec(item.recorrencia))}</b></div>` : ''}
+      <div class="muted" style="font-size:12.5px;margin-bottom:14px">Sem hora, o item vira tarefa e só aparece no resumo da manhã.</div>
+      <button class="btn danger full" data-f="excluir">Excluir</button>`
+    : `
+      <div class="field">
+        <label>Escreva como você falaria</label>
+        <input id="lbFrase" placeholder="amanhã 9h pagar faculdade" autocomplete="off">
+      </div>
+      <div class="banner info" id="lbPreview">Comece a escrever que eu mostro como entendi.</div>
+      <label style="margin-bottom:8px">Atalhos</label>
+      <div class="chips scroll" id="lbAtalhos" style="margin-bottom:6px">
+        ${['hoje 18:00', 'amanhã 09:00', 'sexta 14h', 'em 30min', 'todo dia 7h', 'toda segunda 19h', 'dias úteis 6h30', 'todo mês dia 10'].map((a) => `<button class="chip dim" data-atalho="${esc(a)}">${esc(a)}</button>`).join('')}
+      </div>
+      <div class="muted" style="font-size:12.5px">O atalho entra no começo da frase — depois é só completar com o que é.</div>`
+
+  const { bg, fechar } = sheet({
+    titulo: item ? `Item #${item.num}` : 'Novo lembrete',
+    corpo,
+    acoes: [{
+      label: 'Salvar', onClick: async ({ btn }) => {
+        btn.disabled = true
+        try {
+          if (item) {
+            await api(`/agenda/${item.num}`, {
+              method: 'PATCH',
+              body: {
+                texto: $('#lbTexto', bg).value.trim(),
+                data: item.recorrencia ? null : $('#lbData', bg).value,
+                hora: $('#lbHora', bg).value || null,
+              },
+            })
+            fechar(); toast('Atualizado.')
+          } else {
+            const frase = $('#lbFrase', bg).value.trim()
+            if (!frase) { btn.disabled = false; return toast('Escreva o lembrete.', 'err') }
+            const r = await api('/agenda', { body: { frase } })
+            fechar(); toast(`📝 ${r.item.texto}`)
+          }
+          render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+    aoAbrir: () => setTimeout(() => $(item ? '#lbTexto' : '#lbFrase', bg)?.focus(), 340),
+  })
+
+  if (item) {
+    $('[data-f="excluir"]', bg).onclick = async () => {
+      if (!await confirmar(`Excluir "${item.texto}"?`, 'Excluir')) return
+      await api(`/agenda/${item.num}`, { method: 'DELETE' })
+      fechar(); toast('Excluído.'); render({ manterScroll: true })
+    }
+    return
+  }
+
+  // prévia ao vivo: mostra como o bot interpretou a frase
+  const campo = $('#lbFrase', bg)
+  let debounce = null
+  let seq = 0
+  const atualizar = async () => {
+    const frase = campo.value.trim()
+    const alvo = $('#lbPreview', bg)
+    const meu = ++seq
+    if (!frase) { alvo.className = 'banner info'; alvo.textContent = 'Comece a escrever que eu mostro como entendi.'; return }
+    try {
+      const r = await api('/agenda/preview', { body: { frase } })
+      if (meu !== seq) return // chegou fora de ordem: já tem prévia mais nova
+      if (r.erro) {
+        alvo.className = 'banner warn'
+        alvo.textContent = r.erro === 'sem descrição' ? '⚠️ Faltou dizer o quê.' : '⚠️ Não entendi.'
+        return
+      }
+      const quando = r.recorrencia ? `🔁 ${descreverRec(r.recorrencia)}` : `📅 ${rotuloDia(r.data)}`
+      alvo.className = 'banner ok'
+      alvo.innerHTML = `<b>${esc(r.texto)}</b><br>${quando}${r.hora ? ` às <b>${esc(r.hora)}</b>` : ' <span class="muted">(sem hora — vira tarefa)</span>'}`
+    } catch { /* silencioso: é só a prévia */ }
+  }
+  campo.oninput = () => { clearTimeout(debounce); debounce = setTimeout(atualizar, 150) }
+  campo.onkeydown = (e) => { if (e.key === 'Enter') $('footer .btn', bg).click() }
+
+  // Trocar de atalho substitui o anterior em vez de empilhar em cima
+  let ultimoAtalho = ''
+  $$('[data-atalho]', bg).forEach((b) => {
+    b.onclick = () => {
+      vibrar()
+      const novo = b.dataset.atalho
+      let resto = campo.value
+      if (ultimoAtalho && resto.startsWith(ultimoAtalho)) resto = resto.slice(ultimoAtalho.length)
+      resto = resto.trim()
+      ultimoAtalho = novo
+      campo.value = `${novo} ${resto}`.trim() + (resto ? '' : ' ')
+      $$('[data-atalho]', bg).forEach((x) => x.classList.toggle('on', x === b))
+      campo.focus()
+      atualizar()
+    }
+  })
 }
 
 // ---------- fichas (toque numa linha) ----------
@@ -1438,7 +1680,7 @@ function telaLogin(erro = '') {
 // ---------- boot ----------
 
 $$('#tabbar button').forEach((b) => { b.onclick = () => { vibrar(); TAB = b.dataset.tab; render() } })
-$('#fab').onclick = () => { vibrar(); formGasto() }
+$('#fab').onclick = () => { vibrar(); TAB === 'agenda' ? formLembrete() : formGasto() }
 
 window.addEventListener('unhandledrejection', (e) => toast(e.reason?.message || 'Erro inesperado', 'err'))
 

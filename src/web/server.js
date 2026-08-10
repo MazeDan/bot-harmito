@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
 import { cobrar, montarMensagemPessoa, montarResumoFatura, rodarFechamentos, rodarLembretes } from '../lib/cobranca.js'
 import { diasAteProximoBackup, enviarBackup, gerarCSV, snapshotDiario } from '../lib/backup.js'
+import * as ag from '../lib/agenda.js'
+import { montarFimDeSemana, montarResumoDia, montarSemana } from '../lib/lembretes.js'
+import { parseQuando } from '../lib/parseQuando.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
@@ -98,9 +101,18 @@ function montarEstado() {
   const hoje = fin.ym(new Date())
   const gastosMes = fin.raw().expenses.filter((e) => e.competencia === hoje)
 
+  const ahoje = ag.hojeISO()
+
   return {
     eu,
     minhaParte: fin.minhaParte(),
+    agenda: {
+      hoje: ahoje,
+      dias: ag.periodo(ahoje, ag.somarDias(ahoje, 45)),
+      atrasados: ag.atrasados(ahoje),
+      numeros: ag.resumoNumeros(),
+      recorrentes: ag.raw().itens.filter((i) => i.recorrencia),
+    },
     online: isOnline(),
     cobranca: { dryRun: config.cobranca.dryRun, ativo: config.cobranca.ativo, horario: config.cobranca.horario },
     backup: {
@@ -237,6 +249,52 @@ async function api(req, res, url) {
   // --- extratos bancários ---
   if (p.startsWith('/accounts/') && m === 'DELETE') {
     await fin.deleteAccount(decodeURIComponent(p.slice(10)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- agenda ---
+  if (p === '/agenda' && m === 'POST') {
+    // aceita a frase solta ("amanhã 9h dentista") ou os campos já separados
+    let dados = body
+    if (body.frase) {
+      const r = parseQuando(body.frase)
+      if (r.erro) return json(res, 400, { erro: r.erro === 'sem descrição' ? 'Faltou dizer o quê.' : 'Não entendi o quando.' })
+      dados = r
+    }
+    if (!dados.texto) return json(res, 400, { erro: 'Faltou o texto.' })
+    const item = await ag.adicionar(dados)
+    return json(res, 200, { ok: true, item, state: montarEstado() })
+  }
+
+  if (p === '/agenda/preview' && m === 'POST') {
+    const r = parseQuando(body.frase || '')
+    return json(res, 200, r)
+  }
+
+  if (p === '/agenda/resumos' && m === 'GET') {
+    return json(res, 200, {
+      dia: montarResumoDia(),
+      semana: montarSemana(),
+      fimDeSemana: montarFimDeSemana(),
+    })
+  }
+
+  if (p.startsWith('/agenda/') && (m === 'PATCH' || m === 'PUT')) {
+    const num = Number(decodeURIComponent(p.slice(8)))
+    if (body.feito !== undefined) {
+      const i = await ag.marcarFeito(num, body.feito, body.data || null)
+      if (!i) return json(res, 404, { erro: 'Item não encontrado.' })
+    }
+    const campos = ['texto', 'data', 'hora', 'recorrencia']
+    if (campos.some((c) => body[c] !== undefined)) {
+      const i = await ag.editar(num, body)
+      if (!i) return json(res, 404, { erro: 'Item não encontrado.' })
+    }
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  if (p.startsWith('/agenda/') && m === 'DELETE') {
+    await ag.remover(Number(decodeURIComponent(p.slice(8))))
     return json(res, 200, { ok: true, state: montarEstado() })
   }
 

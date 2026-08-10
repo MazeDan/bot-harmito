@@ -121,6 +121,36 @@ A senha vai só no `sessionStorage` do navegador — nunca na URL — e a API bl
 
 Variáveis de ambiente (veja [.env.example](.env.example)): `PAINEL_PORT` (3333), `PAINEL_HOST` (127.0.0.1), `PAINEL_TOKEN` (senha fixa; se vazia gera uma aleatória a cada boot e imprime no log), `PAINEL_URL` (URL pública, para o `/painel`), `PAINEL_ATIVO=0` para desligar. Cobrança: `COBRANCA_REAL=1`, `COBRANCA_HORARIO`, `COBRANCA_MAX`, `COBRANCA_ATIVA=0`.
 
+## Agenda: compromissos e tarefas
+
+Anote falando normal — o bot entende o "quando" dentro da frase.
+
+| Comando | O que faz |
+|---|---|
+| `/lembrete 18:30 treinar` | Compromisso de hoje às 18:30 |
+| `/lembrete amanhã 09:00 pagar faculdade` | Aceita `hoje`, `amanhã`, `depois de amanhã`, dias da semana, `12/09`, `em 30min`, `em 2h` |
+| `/lembrete comprar presente` | Sem hora vira **tarefa**: não toca alarme, só aparece no resumo do dia |
+| `/lembrete todo dia 7h academia` | Repete: `todo dia`, `dias úteis`, `toda segunda`, `todo mês dia 10` |
+| `/lembretes` | Lista os próximos, agrupados por dia, com o número de cada um |
+| `/hoje` (ou `/agenda`) | Tudo do dia: compromissos, tarefas, atrasados e faturas vencendo |
+| `/amanha` · `/semana` · `/semana fds` | Amanhã · próximos 7 dias · fim de semana |
+| `/feito 3` | Conclui (aceita vários: `/feito 3 5 7`) |
+| `/cancelarlembrete 3` | Apaga |
+
+### O que chega sozinho
+
+Marque o chat com **`/relatorios`** (o mesmo do fechamento e do backup) e, às 07:00:
+
+- **Todo dia** — bom-dia com os compromissos e tarefas do dia, o que ficou atrasado e as faturas que vencem nos próximos 3 dias
+- **Segunda** — junto vai a visão dos 7 dias
+- **Sexta** — junto vai o fim de semana
+
+Além disso, **cada compromisso com hora marcada dispara um aviso na hora**. Itens que se repetem todo dia aparecem num bloco "🔁 Rotina" nas visões semanais, em vez de repetir sete vezes.
+
+Ajuste com `AGENDA_HORARIO` (padrão `07:00`) e `AGENDA_ATIVA=0`.
+
+No painel, a aba **Agenda** mostra tudo agrupado por dia com um círculo para concluir, e o botão flutuante vira 📝 com a mesma escrita livre do WhatsApp — com prévia ao vivo de como o bot entendeu. O Resumo ganha um bloco "Hoje" no topo, e a aba mostra uma bolinha com o número de pendências.
+
 ## Deploy na Square Cloud
 
 O [squarecloud.app](squarecloud.app) já está configurado (`SUBDOMAIN=harmito`, `MAIN=src/index.js`). A Square Cloud só alcança o processo em **`0.0.0.0:80`** — por isso o `.env` precisa ir junto no zip:

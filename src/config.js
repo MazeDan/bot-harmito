@@ -48,6 +48,14 @@ export const config = {
     intervaloMs: [8_000, 20_000],
   },
 
+  // Agenda: lembretes, tarefas e o resumo da manhã
+  agenda: {
+    ativo: process.env.AGENDA_ATIVA !== '0',
+    // Bom-dia com o que tem no dia. Na segunda vai a semana junto; na sexta,
+    // o fim de semana. Vai para o chat marcado com /relatorios.
+    horarioResumo: process.env.AGENDA_HORARIO || '07:00',
+  },
+
   // Backup dos dados financeiros
   backup: {
     ativo: process.env.BACKUP_ATIVO !== '0',
