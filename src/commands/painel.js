@@ -4,6 +4,8 @@ export default {
   name: 'painel',
   aliases: ['dashboard', 'web'],
   description: 'Mostra o link do painel web de controle financeiro',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId }) {
     const url = painelURL()

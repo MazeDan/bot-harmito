@@ -10,6 +10,8 @@ export default {
   name: 'cartoes',
   aliases: ['cards'],
   description: 'Lista os cartões com a fatura atual e quanto falta pro vencimento',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId }) {
     const cards = listCards()

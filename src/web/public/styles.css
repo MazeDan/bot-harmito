@@ -217,6 +217,7 @@ label { font-size: 12.5px; color: var(--txt-2); font-weight: 600; display: block
 }
 .chip:active { transform: scale(.96); }
 .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip.bloq { background: rgba(255, 90, 106, .14); border-color: rgba(255, 90, 106, .45); color: var(--danger); }
 .chip.dim { font-size: 13px; padding: 8px 13px; min-height: 38px; }
 
 /* fila de chips que rola na horizontal (filtros) */

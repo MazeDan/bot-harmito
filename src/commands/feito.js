@@ -6,6 +6,8 @@ export default {
   // atenção: 'ok' não entra aqui — já é alias do /confirmar do lote
   aliases: ['concluir', 'fiz', 'done', 'check'],
   description: 'Marca um item da agenda como concluído: /feito 3',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     if (!args.length) {

@@ -19,7 +19,7 @@ const empty = () => ({
   // `eu` = chave da pessoa que é o dono do cartão (você). Os gastos dela não
   // entram em "a receber" e ela nunca é cobrada.
   // donoJid = chat que recebe fechamento de fatura e backup. ultimoBackup = ISO.
-  settings: { pix: '', pixNome: '', eu: '', donoJid: '', ultimoBackup: '' },
+  settings: { pix: '', pixNome: '', eu: '', donoJid: '', donoUser: '', ultimoBackup: '' },
 })
 
 let db = empty()

@@ -4,6 +4,8 @@ export default {
   name: 'cancelar',
   aliases: ['cancela'],
   description: 'Descarta o lote de lançamentos pendente',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, userId }) {
     const tinha = pendentes.delete(userId)

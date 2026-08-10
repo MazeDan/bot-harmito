@@ -22,6 +22,8 @@ export default {
   name: 'lote',
   aliases: ['lancar-lote', 'batch'],
   description: 'Lança vários gastos de uma vez (mensagem de várias linhas)',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, userId, text }) {
     // tudo depois da primeira linha do comando é o corpo do lote

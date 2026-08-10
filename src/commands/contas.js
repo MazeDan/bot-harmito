@@ -10,6 +10,8 @@ export default {
   name: 'contas',
   aliases: ['saldos', 'resumo', 'deve'],
   description: 'Resumo geral: quanto cada um te deve + total por conta bancária',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId }) {
     const pessoas = allBalances().filter((b) => Math.abs(b.saldo) > 0.001)

@@ -4,6 +4,8 @@ export default {
   name: 'cancelarlembrete',
   aliases: ['apagarlembrete', 'dellembrete'],
   description: 'Apaga um item da agenda: /cancelarlembrete 3',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     if (!args.length) {

@@ -7,6 +7,8 @@ export default {
   name: 'confirmar',
   aliases: ['ok', 'confirma'],
   description: 'Confirma o último lote de lançamentos enviado com /lote',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, userId }) {
     const p = pendentes.get(userId)

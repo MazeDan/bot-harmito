@@ -5,6 +5,8 @@ export default {
   name: 'amanha',
   aliases: ['amanhã'],
   description: 'A agenda de amanhã',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId }) {
     const texto = montarResumoDia(somarDias(hojeISO(), 1)).replace('☀️ *Bom dia!* —', '📅 *Amanhã* —')

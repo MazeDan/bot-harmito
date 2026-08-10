@@ -322,6 +322,170 @@ function resumo() {
   `
 }
 
+// ---------- grupos ----------
+
+const CATEGORIAS = {
+  diversao: '🎲 Diversão',
+  grupo: '👥 Grupo',
+  midia: '🖼️ Mídia',
+  utilidades: '🔧 Utilidades',
+}
+
+/** Estado de um comando num grupo: 'liberado' | 'bloqueado' | 'desligado' */
+function estadoComando(cmd, cfg) {
+  if (cfg.bloqueados?.includes(cmd.nome)) return 'bloqueado'
+  if (cfg.comandos?.includes(cmd.nome)) return 'liberado'
+  return cfg.categorias?.includes(cmd.categoria) ? 'liberado' : 'desligado'
+}
+
+function cardGrupos() {
+  const { lista, padrao } = S.grupos
+  const nomesCat = padrao.categorias.map((c) => CATEGORIAS[c] ?? c).join(', ') || 'nenhuma'
+
+  return `<div class="card">
+    <h3>Grupos <small>o que o bot responde em cada um</small></h3>
+    ${lista.length ? `<div class="rows">${lista.map((g) => {
+      const liberados = S.grupos.comandos.filter((c) => estadoComando(c, g) === 'liberado').length
+      return linha({
+        av: g.silenciado ? '🔇' : '👥',
+        t1: esc(g.nome),
+        t2: g.silenciado ? 'silenciado' : `${liberados} comando(s) · ${(g.categorias ?? []).map((c) => (CATEGORIAS[c] ?? c).replace(/^\S+\s/, '')).join(', ') || 'nada'}`,
+        acao: 'config-grupo', dados: `data-jid="${esc(g.jid)}"`,
+      })
+    }).join('')}</div>`
+      : `<div class="empty"><span class="big">👥</span>Nenhum grupo ainda.<br>
+         Eles aparecem sozinhos assim que alguém usar um comando lá.</div>`}
+
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn ghost" data-acao="config-padrao">⚙️ Padrão dos novos</button>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:10px">Grupo novo já entra com: ${esc(nomesCat)}.</div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Comandos de <b>financeiro</b> e <b>agenda</b> nunca funcionam em grupo — são só seus, no privado.</div>
+  </div>`
+}
+
+/** Editor de um grupo (ou do padrão, quando jid = null) */
+function configGrupo(jid) {
+  const padraoMode = !jid
+  const cfg = padraoMode
+    ? { ...S.grupos.padrao, nome: 'Padrão dos grupos novos', silenciado: false, regras: '', boasVindas: false }
+    : S.grupos.lista.find((g) => g.jid === jid)
+  if (!cfg) return
+
+  // cópia local: só grava quando você toca em Salvar
+  const estado = {
+    categorias: [...(cfg.categorias ?? [])],
+    comandos: [...(cfg.comandos ?? [])],
+    bloqueados: [...(cfg.bloqueados ?? [])],
+    silenciado: Boolean(cfg.silenciado),
+    boasVindas: Boolean(cfg.boasVindas),
+    regras: cfg.regras ?? '',
+  }
+
+  const corpoComandos = () => Object.entries(CATEGORIAS).map(([id, rotulo]) => {
+    const doGrupo = S.grupos.comandos.filter((c) => c.categoria === id)
+    if (!doGrupo.length) return ''
+    const catOn = estado.categorias.includes(id)
+    return `<div class="field">
+      <button class="chip ${catOn ? 'on' : ''}" data-cat="${id}" style="margin-bottom:9px">${rotulo} — ${catOn ? 'ligada' : 'desligada'}</button>
+      <div class="chips">
+        ${doGrupo.map((c) => {
+          const est = estadoComando(c, estado)
+          const cor = est === 'liberado' ? 'on' : est === 'bloqueado' ? 'bloq' : ''
+          return `<button class="chip dim ${cor}" data-cmd="${esc(c.nome)}" title="${esc(c.descricao)}">${est === 'bloqueado' ? '🚫 ' : ''}/${esc(c.nome)}</button>`
+        }).join('')}
+      </div>
+    </div>`
+  }).join('')
+
+  const corpo = `
+    ${padraoMode ? '<div class="banner info">Isso vale para grupos que o bot ainda não conhece. Grupos já existentes não mudam.</div>' : ''}
+    ${!padraoMode ? `<div class="field">
+      <button class="chip ${estado.silenciado ? 'on' : ''}" data-toggle="silenciado" style="width:100%;justify-content:center">
+        ${estado.silenciado ? '🔇 Silenciado — não responde nada' : '🔊 Ativo neste grupo'}
+      </button>
+    </div>` : ''}
+
+    <div id="cgComandos">${corpoComandos()}</div>
+    <div class="muted" style="font-size:12px;margin:-4px 0 16px">
+      Toque na <b>categoria</b> para ligar/desligar tudo dela. Toque num <b>comando</b> para abrir uma exceção — roxo é liberado, 🚫 é bloqueado.
+    </div>
+
+    ${!padraoMode ? `
+      <div class="field">
+        <button class="chip ${estado.boasVindas ? 'on' : ''}" data-toggle="boasVindas" style="width:100%;justify-content:center">
+          ${estado.boasVindas ? '👋 Saúda quem entra' : '👋 Boas-vindas desligadas'}
+        </button>
+      </div>
+      <div class="field"><label>Regras do grupo</label>
+        <textarea id="cgRegras" rows="4" style="min-height:90px" placeholder="1. Sem spam&#10;2. Respeito sempre">${esc(estado.regras)}</textarea>
+      </div>` : ''}`
+
+  const { bg, fechar } = sheet({
+    titulo: cfg.nome,
+    corpo,
+    acoes: [{
+      label: 'Salvar', onClick: async ({ btn }) => {
+        btn.disabled = true
+        try {
+          const dados = { ...estado }
+          if (!padraoMode) dados.regras = $('#cgRegras', bg)?.value ?? ''
+          if (padraoMode) await api('/grupos/padrao', { body: dados })
+          else await api(`/grupos/${encodeURIComponent(jid)}`, { method: 'PATCH', body: dados })
+          fechar(); toast('Salvo.'); render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+
+  const redesenhar = () => {
+    $('#cgComandos', bg).innerHTML = corpoComandos()
+    ligarChips()
+  }
+
+  function ligarChips() {
+    $$('[data-cat]', bg).forEach((b) => {
+      b.onclick = () => {
+        vibrar()
+        const id = b.dataset.cat
+        if (estado.categorias.includes(id)) estado.categorias = estado.categorias.filter((c) => c !== id)
+        else estado.categorias.push(id)
+        redesenhar()
+      }
+    })
+    $$('[data-cmd]', bg).forEach((b) => {
+      b.onclick = () => {
+        vibrar()
+        const nome = b.dataset.cmd
+        const cmd = S.grupos.comandos.find((c) => c.nome === nome)
+        const est = estadoComando(cmd, estado)
+        // liberado → bloqueado → volta a seguir a categoria
+        if (est === 'liberado') {
+          estado.comandos = estado.comandos.filter((c) => c !== nome)
+          estado.bloqueados.push(nome)
+        } else if (est === 'bloqueado') {
+          estado.bloqueados = estado.bloqueados.filter((c) => c !== nome)
+        } else {
+          estado.comandos.push(nome)
+        }
+        redesenhar()
+      }
+    })
+    $$('[data-toggle]', bg).forEach((b) => {
+      b.onclick = () => {
+        vibrar()
+        const campo = b.dataset.toggle
+        estado[campo] = !estado[campo]
+        b.classList.toggle('on', estado[campo])
+        b.textContent = campo === 'silenciado'
+          ? (estado.silenciado ? '🔇 Silenciado — não responde nada' : '🔊 Ativo neste grupo')
+          : (estado.boasVindas ? '👋 Saúda quem entra' : '👋 Boas-vindas desligadas')
+      }
+    })
+  }
+  ligarChips()
+}
+
 // ---------- agenda ----------
 
 const RECORRENCIA = {
@@ -711,6 +875,8 @@ function mais() {
       </div>
     </div>
 
+    ${cardGrupos()}
+
     <div class="card"><h3>Avisos automáticos e backup</h3>
       <div class="rows">
         <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Chat de avisos</span>
@@ -848,6 +1014,10 @@ const acoes = {
     const r = await api('/lembretes', { body: { real: true } })
     resultadoCobranca(r.resultados, false); render()
   },
+
+  // --- grupos ---
+  'config-grupo': ({ jid }) => configGrupo(jid),
+  'config-padrao': () => configGrupo(null),
 
   // --- agenda ---
   'ir-agenda': () => { TAB = 'agenda'; render() },

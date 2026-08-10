@@ -4,6 +4,8 @@ export default {
   name: 'pagou',
   aliases: ['pago', 'pagar', 'recebi'],
   description: 'Registra um pagamento recebido: /pagou 50 danilo [nubank]',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const valor = Number(String(args[0] ?? '').replace(/\./g, '').replace(',', '.'))

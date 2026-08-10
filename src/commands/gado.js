@@ -2,6 +2,7 @@ export default {
   name: 'gado',
   aliases: ['gada'],
   description: 'Mede o nível de gado: /gado @fulano (sem marcar, mede você mesmo)',
+  categoria: 'diversao',
 
   async run({ sock, msg, chatId, userId }) {
     const alvo =

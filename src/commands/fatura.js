@@ -11,6 +11,8 @@ export default {
   name: 'fatura',
   aliases: ['f'],
   description: 'Detalha a fatura de um cartão: /fatura nubank [2026-09]',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const cartao = args[0]

@@ -16,6 +16,8 @@ export default {
   name: 'cobrar',
   aliases: ['cobranca', 'avisar'],
   description: 'Cobra quem deve num cartão: /cobrar nubank [2026-09] [real]',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const cartao = args[0]

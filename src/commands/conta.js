@@ -6,6 +6,8 @@ export default {
   name: 'conta',
   aliases: ['extratopessoa', 'ver'],
   description: 'Mostra o extrato de uma pessoa: /conta danilo',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const pessoa = args[0]

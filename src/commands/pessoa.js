@@ -4,6 +4,8 @@ export default {
   name: 'pessoa',
   aliases: ['pessoas', 'contato'],
   description: 'Vincula o telefone de alguém (pra cobrança): /pessoa danilo 11999998888',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     if (!args.length || args[0].toLowerCase() === 'list') {

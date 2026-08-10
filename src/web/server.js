@@ -9,6 +9,8 @@ import { diasAteProximoBackup, enviarBackup, gerarCSV, snapshotDiario } from '..
 import * as ag from '../lib/agenda.js'
 import { montarFimDeSemana, montarResumoDia, montarSemana } from '../lib/lembretes.js'
 import { parseQuando } from '../lib/parseQuando.js'
+import * as grp from '../lib/grupos.js'
+import { commands } from '../handler.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
@@ -106,6 +108,15 @@ function montarEstado() {
   return {
     eu,
     minhaParte: fin.minhaParte(),
+    grupos: {
+      lista: grp.listarGrupos(),
+      padrao: grp.raw().padrao,
+      // catálogo de comandos para montar as caixinhas do painel
+      comandos: [...new Set(commands.values())]
+        .filter((c) => !c.dono)
+        .map((c) => ({ nome: c.name, descricao: c.description, categoria: c.categoria ?? 'utilidades' }))
+        .sort((a, b) => a.nome.localeCompare(b.nome)),
+    },
     agenda: {
       hoje: ahoje,
       dias: ag.periodo(ahoje, ag.somarDias(ahoje, 45)),
@@ -249,6 +260,22 @@ async function api(req, res, url) {
   // --- extratos bancários ---
   if (p.startsWith('/accounts/') && m === 'DELETE') {
     await fin.deleteAccount(decodeURIComponent(p.slice(10)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- grupos ---
+  if (p.startsWith('/grupos/') && (m === 'PATCH' || m === 'PUT')) {
+    const jid = decodeURIComponent(p.slice(8))
+    const g = await grp.atualizarGrupo(jid, body)
+    if (!g) return json(res, 404, { erro: 'Grupo não encontrado.' })
+    return json(res, 200, { ok: true, grupo: g, state: montarEstado() })
+  }
+  if (p.startsWith('/grupos/') && m === 'DELETE') {
+    await grp.removerGrupo(decodeURIComponent(p.slice(8)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p === '/grupos/padrao' && m === 'POST') {
+    await grp.setPadrao(body)
     return json(res, 200, { ok: true, state: montarEstado() })
   }
 

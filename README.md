@@ -14,24 +14,59 @@ Na primeira vez, vai aparecer um **QR code no terminal** — escaneie com o What
 
 ## Comandos
 
-| Comando | O que faz |
-|---|---|
-| `/fig` (ou `/s`) | Envie uma imagem/vídeo/gif com essa legenda, ou responda a uma mídia — vira figurinha (estática ou animada) |
-| `/roubar` | Responda a uma figurinha — ela volta com o pack do bot |
-| `/toimg` | Responda a uma figurinha — vira imagem (ou gif, se animada) |
-| `/audio` | Responda a um vídeo — devolve o áudio em mp3. `/audio voz` manda como mensagem de voz; `/audio 0:10 0:35` corta o trecho |
-| `/dado` | Joga um dado (`/dado 20` para d20) |
-| `/moeda` | Cara ou coroa |
-| `/ppt pedra` | Pedra, papel e tesoura contra o bot |
-| `/feio @fulano` | Mede o quanto a pessoa é feia 😄 |
-| `/gado @fulano` | Gadômetro 🐂 |
-| `/ship @a @b` | Shipômetro — % do casal 💘 |
-| `/sorte pergunta?` | Bola 8 mágica 🎱 |
-| `/escolher a, b, c` | Escolhe uma opção por você |
-| `/ping` | Verifica se o bot está online |
-| `/menu` | Lista todos os comandos |
+`/menu` lista o que está disponível **naquele chat**, agrupado por seção. `/menu diversão` detalha uma seção.
 
 Prefixos aceitos: `/`, `!` e `.`
+
+### 🎲 Diversão
+
+| Comando | O que faz |
+|---|---|
+| `/dado` · `/moeda` · `/ppt pedra` | Dado (`/dado 20`), cara ou coroa, pedra-papel-tesoura |
+| `/adivinha` | Penso num número e você tenta — `/adivinha 42` chuta, eu digo se é maior ou menor |
+| `/quiz` | Pergunta de conhecimentos gerais; responda com `/quiz b` |
+| `/verdade` · `/desafio` | Verdade ou desafio (marque alguém para direcionar) |
+| `/feio` · `/gado` · `/ship` · `/sorte` · `/escolher` | Os medidores de sempre |
+
+### 👥 Grupo
+
+| Comando | O que faz |
+|---|---|
+| `/enquete Vamos sair? \| sim \| não` | Cria uma **enquete nativa** do WhatsApp |
+| `/sorteio [n]` | Sorteia n pessoas do grupo — ou `/sorteio pizza, sushi` sorteia entre opções |
+| `/quem vai pagar a conta?` | Sorteia alguém para a pergunta |
+| `/ranking [tema]` | Pódio do dia (a pontuação é fixa no dia, muda só amanhã) |
+| `/vs @a @b` | Duelo narrado — sem marcar ninguém, sorteia dois |
+| `/todos [recado]` | Marca todo mundo — **só admin** |
+| `/admins` · `/infogrupo` | Lista os admins · dados do grupo e o que está liberado nele |
+| `/link` | Link de convite — só admin, e o bot precisa ser admin |
+| `/regras` · `/regras set ...` | Mostra as regras · define (só admin) |
+| `/boasvindas on\|off` | Saúda quem entra, com as regras junto — só admin |
+
+### 🖼️ Figurinhas e mídia
+
+| Comando | O que faz |
+|---|---|
+| `/fig` (ou `/s`) | Imagem/vídeo/gif com essa legenda, ou responda a uma mídia — vira figurinha |
+| `/roubar` · `/toimg` | Figurinha com o pack do bot · figurinha vira imagem/gif |
+| `/audio` | Responda a um vídeo — devolve o mp3. `/audio voz` manda como mensagem de voz; `/audio 0:10 0:35` corta o trecho |
+
+### 🔧 Utilidades
+
+`/menu` · `/ping`
+
+## Quem pode usar o quê
+
+Os comandos de **financeiro** e **agenda** são só do dono, e **nunca funcionam em grupo**. O primeiro que usar um deles vira o dono — depois disso o bot ignora qualquer outra pessoa que tente.
+
+O resto é configurado **por grupo**, no painel (aba *Mais* → **Grupos**). Os grupos aparecem sozinhos assim que alguém usa um comando neles. Para cada um dá para:
+
+- ligar/desligar **categorias inteiras** (diversão, grupo, mídia, utilidades);
+- abrir **exceções por comando** — liberar um de uma categoria desligada, ou bloquear um de uma categoria ligada;
+- **silenciar** o bot no grupo por completo;
+- definir as **regras** e ligar as **boas-vindas**.
+
+Grupo novo já entra liberado para diversão, grupo, mídia e utilidades — dá para mudar esse padrão no mesmo lugar. `/menu` nunca é bloqueado, senão ninguém descobriria o que está ligado.
 
 ## Financeiro (cartões, cobrança e painel web)
 

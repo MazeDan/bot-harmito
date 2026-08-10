@@ -2,6 +2,7 @@ export default {
   name: 'ping',
   aliases: ['status'],
   description: 'Verifica se o bot está online e o tempo de resposta',
+  categoria: 'utilidades',
 
   async run({ sock, msg, chatId }) {
     const inicio = Date.now()

@@ -5,6 +5,7 @@ export default {
   name: 'fig',
   aliases: ['s', 'sticker', 'figurinha'],
   description: 'Cria figurinha de uma imagem, vídeo ou gif (envie com a legenda ou responda a mídia)',
+  categoria: 'midia',
   heavy: true,
 
   async run({ sock, msg, chatId }) {

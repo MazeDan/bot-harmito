@@ -4,7 +4,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { downloadMediaMessage } from 'baileys'
 import PQueue from 'p-queue'
 import { config } from './config.js'
-import { money, saveStatement } from './lib/finance.js'
+import { getSettings, money, saveStatement, setSettings } from './lib/finance.js'
+import { ehGrupo, permitido, registrarGrupo } from './lib/grupos.js'
+import { metadados } from './lib/grupo.js'
 import { parseExtrato } from './lib/pdfExtrato.js'
 import { allow } from './lib/rateLimit.js'
 
@@ -133,6 +135,37 @@ export async function handleMessage(sock, msg) {
   const chatId = msg.key.remoteJid
   const userId = msg.key.participant ?? msg.key.remoteJid
 
+  // registra o grupo (para ele aparecer no painel) sem travar o comando
+  if (ehGrupo(chatId)) {
+    metadados(sock, chatId)
+      .then((meta) => registrarGrupo(chatId, meta?.subject))
+      .catch(() => registrarGrupo(chatId))
+  }
+
+  // comandos do dono: financeiro, agenda e configuração
+  if (cmd.dono) {
+    const dono = getSettings().donoUser
+    if (!dono) {
+      // primeiro a usar vira o dono — evita ficar trancado do lado de fora
+      await setSettings({ donoUser: userId })
+      console.log(`👑 Dono definido: ${userId}`)
+      await sock.sendMessage(chatId, {
+        text: `👑 Você agora é o dono do bot.\n\n_Só você usa os comandos de financeiro e agenda. Troque com_ */dono trocar* _se precisar._`,
+      }, { quoted: msg })
+    } else if (userId !== dono) {
+      return // silencioso de propósito: ninguém precisa saber que o comando existe
+    }
+  } else {
+    // demais comandos respeitam o que está liberado para aquele grupo
+    const r = permitido(cmd, chatId)
+    if (!r.ok) {
+      if (r.motivo !== 'silenciado') {
+        await sock.sendMessage(chatId, { react: { text: '🚫', key: msg.key } })
+      }
+      return
+    }
+  }
+
   if (!allow(userId)) {
     await sock.sendMessage(chatId, {
       react: { text: '🕒', key: msg.key },
@@ -140,7 +173,7 @@ export async function handleMessage(sock, msg) {
     return
   }
 
-  const ctx = { sock, msg, chatId, userId, args, text }
+  const ctx = { sock, msg, chatId, userId, args, text, ehGrupo: ehGrupo(chatId) }
 
   try {
     // Comandos pesados (conversão de mídia) passam pela fila; os leves rodam direto

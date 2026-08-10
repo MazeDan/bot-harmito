@@ -10,6 +10,7 @@ export default {
   name: 'toimg',
   aliases: ['togif', 'imagem'],
   description: 'Transforma figurinha de volta em imagem (ou gif, se for animada) — responda a uma figurinha',
+  categoria: 'midia',
   heavy: true,
 
   async run({ sock, msg, chatId }) {

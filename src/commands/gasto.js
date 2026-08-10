@@ -11,6 +11,8 @@ export default {
   name: 'gasto',
   aliases: ['item', 'lancar', 'add', 'compra'],
   description: 'Lança um gasto: /gasto 22 danilo nubank lanche (aceita 3x e data 12/07)',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     // o cartão pode vir como #nubank ou como uma palavra que bate com um cartão cadastrado

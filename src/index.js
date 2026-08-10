@@ -9,6 +9,8 @@ import { handleMessage, loadCommands } from './handler.js'
 import { initAgenda } from './lib/agenda.js'
 import { iniciarAgendador } from './lib/cobranca.js'
 import { initFinance } from './lib/finance.js'
+import { arroba, limparCache, metadados } from './lib/grupo.js'
+import { getGrupo, initGrupos, registrarGrupo } from './lib/grupos.js'
 import { iniciarAgendaScheduler } from './lib/lembretes.js'
 import { setSock } from './lib/wa.js'
 import { iniciarPainel } from './web/server.js'
@@ -49,6 +51,27 @@ async function start() {
     }
   })
 
+  // Saudação a quem entra (ligada por grupo com /boasvindas)
+  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+    limparCache(id)
+    if (action !== 'add') return
+
+    const cfg = getGrupo(id)
+    if (!cfg?.boasVindas) return
+
+    try {
+      const meta = await metadados(sock, id, { forcar: true })
+      await registrarGrupo(id, meta?.subject)
+      const nomes = participants.map((p) => arroba(p)).join(' ')
+      let texto = `👋 Bem-vindo(a), ${nomes}!\n\nVocê entrou em *${meta?.subject ?? 'nosso grupo'}*.`
+      if (cfg.regras) texto += `\n\n📜 *Regras*\n${cfg.regras}`
+      texto += '\n\n_Digite_ `/menu` _para ver o que eu faço._'
+      await sock.sendMessage(id, { text: texto, mentions: participants })
+    } catch (err) {
+      console.error('Erro nas boas-vindas:', err.message)
+    }
+  })
+
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return
     for (const msg of messages) {
@@ -59,6 +82,7 @@ async function start() {
 
 initFinance()
 initAgenda()
+initGrupos()
 await loadCommands()
 iniciarPainel()
 iniciarAgendador()

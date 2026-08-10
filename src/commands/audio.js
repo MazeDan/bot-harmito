@@ -11,6 +11,7 @@ export default {
   name: 'audio',
   aliases: ['mp3', 'som'],
   description: 'Tira o áudio de um vídeo (mp3) — responda a um vídeo ou mande com a legenda /audio',
+  categoria: 'midia',
   heavy: true,
 
   async run({ sock, msg, chatId, args }) {

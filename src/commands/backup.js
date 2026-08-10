@@ -6,6 +6,8 @@ export default {
   name: 'backup',
   aliases: ['exportar', 'csv'],
   description: 'Manda agora o backup dos dados financeiros (.json e .csv)',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId }) {
     const s = getSettings()

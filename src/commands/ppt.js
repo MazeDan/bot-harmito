@@ -14,6 +14,7 @@ export default {
   name: 'ppt',
   aliases: ['jokenpo'],
   description: 'Pedra, papel e tesoura contra o bot: /ppt pedra',
+  categoria: 'diversao',
 
   async run({ sock, msg, chatId, args }) {
     const jogada = args[0]?.toLowerCase()

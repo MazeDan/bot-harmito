@@ -15,6 +15,7 @@ export default {
   name: 'sorte',
   aliases: ['8ball', 'bola8'],
   description: 'Bola 8 mágica: faça uma pergunta de sim ou não — /sorte vou ficar rico?',
+  categoria: 'diversao',
 
   async run({ sock, msg, chatId, args }) {
     if (args.length === 0) {

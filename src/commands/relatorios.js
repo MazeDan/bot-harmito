@@ -6,6 +6,8 @@ export default {
   name: 'relatorios',
   aliases: ['relatorio', 'dono', 'aqui'],
   description: 'Marca este chat para receber fechamento de fatura e backup automático',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const s = getSettings()

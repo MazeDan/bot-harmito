@@ -5,6 +5,8 @@ export default {
   name: 'lembretes',
   aliases: ['tarefas', 'compromissos', 'pendencias', 'pendências'],
   description: 'Lista os próximos compromissos e tarefas, com o número de cada um',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const quantidade = Number(args[0]) > 0 ? Math.min(Number(args[0]), 40) : 15

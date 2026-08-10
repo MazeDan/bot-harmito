@@ -11,6 +11,8 @@ export default {
   name: 'eu',
   aliases: ['minhaparte', 'souEu'],
   description: 'Marca quem é você e mostra quanto da fatura é seu: /eu danilo',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     // /eu danilo  → marca

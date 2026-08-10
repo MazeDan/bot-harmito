@@ -25,6 +25,8 @@ export default {
   name: 'cartao',
   aliases: ['card'],
   description: 'Cadastra e edita cartões: /cartao add nubank fecha 3 vence 10',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const acao = (args[0] || '').toLowerCase()

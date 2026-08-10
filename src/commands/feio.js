@@ -2,6 +2,7 @@ export default {
   name: 'feio',
   aliases: ['feia'],
   description: 'Mede o quanto a pessoa é feia (marque alguém: /feio @fulano)',
+  categoria: 'diversao',
 
   async run({ sock, msg, chatId, userId }) {
     const mencionado =

@@ -5,6 +5,8 @@ export default {
   name: 'hoje',
   aliases: ['agenda', 'dia'],
   description: 'Tudo que você tem para hoje: compromissos, tarefas, atrasados e faturas',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     // /hoje 12/09 mostra outro dia

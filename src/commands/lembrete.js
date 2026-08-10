@@ -21,6 +21,8 @@ export default {
   name: 'lembrete',
   aliases: ['lembrar', 'lembra', 'tarefa', 'compromisso', 'anotar'],
   description: 'Anota um compromisso ou tarefa: /lembrete amanhã 09:00 pagar faculdade',
+  categoria: 'agenda',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     if (!args.length || /^(help|ajuda)$/i.test(args[0])) {

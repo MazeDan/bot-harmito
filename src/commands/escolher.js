@@ -2,6 +2,7 @@ export default {
   name: 'escolher',
   aliases: ['escolha', 'pick'],
   description: 'Escolhe uma opção por você: /escolher pizza, hambúrguer, sushi',
+  categoria: 'diversao',
 
   async run({ sock, msg, chatId, args }) {
     const opcoes = args

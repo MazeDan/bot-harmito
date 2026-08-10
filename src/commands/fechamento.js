@@ -5,6 +5,8 @@ export default {
   name: 'fechamento',
   aliases: ['fechou'],
   description: 'Mostra a prévia do aviso de fatura fechada: /fechamento nubank',
+  categoria: 'financeiro',
+  dono: true,
 
   async run({ sock, msg, chatId, args }) {
     const cartao = args[0]
