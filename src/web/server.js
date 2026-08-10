@@ -10,6 +10,7 @@ import * as ag from '../lib/agenda.js'
 import { montarFimDeSemana, montarResumoDia, montarSemana } from '../lib/lembretes.js'
 import { parseQuando } from '../lib/parseQuando.js'
 import * as grp from '../lib/grupos.js'
+import * as lit from '../lib/liturgia.js'
 import { commands } from '../handler.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
@@ -116,6 +117,15 @@ function montarEstado() {
         .filter((c) => !c.dono)
         .map((c) => ({ nome: c.name, descricao: c.description, categoria: c.categoria ?? 'utilidades' }))
         .sort((a, b) => a.nome.localeCompare(b.nome)),
+    },
+    liturgia: {
+      ativo: config.liturgia.ativo,
+      horario: config.liturgia.horario,
+      lembretes: config.liturgia.lembretes,
+      grupos: lit.gruposDaLiturgia(),
+      anotacaoHoje: lit.anotacaoDe(),
+      anotacoes: lit.listarAnotacoes(30),
+      sequencia: lit.sequencia(),
     },
     agenda: {
       hoje: ahoje,
@@ -261,6 +271,31 @@ async function api(req, res, url) {
   if (p.startsWith('/accounts/') && m === 'DELETE') {
     await fin.deleteAccount(decodeURIComponent(p.slice(10)))
     return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- liturgia ---
+  if (p === '/liturgia/grupos' && m === 'POST') {
+    const lista = await lit.definirGrupos(body.grupos)
+    return json(res, 200, { ok: true, grupos: lista, state: montarEstado() })
+  }
+  if (p === '/liturgia/anotacao' && m === 'POST') {
+    const a = body.substituir
+      ? await lit.substituirAnotacao(body.texto, body.data)
+      : await lit.salvarAnotacao(body.texto, body.data)
+    return json(res, 200, { ok: true, anotacao: a, state: montarEstado() })
+  }
+  if (p.startsWith('/liturgia/anotacao/') && m === 'DELETE') {
+    await lit.apagarAnotacao(decodeURIComponent(p.slice(19)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p === '/liturgia/leituras' && m === 'GET') {
+    const l = await lit.buscarLeituras(url.searchParams.get('data') || undefined)
+    if (!l) return json(res, 502, { erro: 'Não consegui buscar a liturgia agora.' })
+    return json(res, 200, { liturgia: l.liturgia, cor: l.cor, partes: lit.montarPartes(l, url.searchParams.get('data') || undefined) })
+  }
+  if (p === '/liturgia/enviar' && m === 'POST') {
+    const r = await lit.rodarEnvioDiario({ forcar: true })
+    return json(res, 200, { resultados: r, state: montarEstado() })
   }
 
   // --- grupos ---

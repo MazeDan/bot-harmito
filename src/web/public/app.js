@@ -322,10 +322,57 @@ function resumo() {
   `
 }
 
+// ---------- liturgia ----------
+
+function cardLiturgia() {
+  const L = S.liturgia
+  const nomeGrupo = (jid) => S.grupos.lista.find((g) => g.jid === jid)?.nome ?? jid
+  const a = L.anotacaoHoje
+
+  return `<div class="card">
+    <h3>🙏 Liturgia diária <small>leituras às ${esc(L.horario)}</small></h3>
+
+    <div class="rows">
+      <div class="row-item" style="cursor:default">
+        <span class="grow t1" style="font-weight:500">Grupos que recebem</span>
+        <b>${L.grupos.length}</b>
+      </div>
+      ${L.grupos.map((j) => `<div class="row-item" style="cursor:default">
+        <span class="avatar">📖</span><span class="grow t1" style="font-weight:500;font-size:14px">${esc(nomeGrupo(j))}</span></div>`).join('')}
+      <div class="row-item" style="cursor:default">
+        <span class="grow t1" style="font-weight:500">Cobrança do /ld</span>
+        <span class="tag">${L.lembretes.map(esc).join(' · ')}</span>
+      </div>
+      ${L.sequencia > 1 ? `<div class="row-item" style="cursor:default">
+        <span class="grow t1" style="font-weight:500">Sequência</span><b style="color:var(--ok)">🔥 ${L.sequencia} dias</b></div>` : ''}
+    </div>
+
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn ghost" data-acao="liturgia-grupos">📖 Escolher grupos</button>
+      <button class="btn ghost" data-acao="liturgia-ler">👁️ Ler hoje</button>
+    </div>
+
+    <h3 style="margin:18px 0 10px">Minha anotação de hoje</h3>
+    ${a
+      ? `<div class="banner ok" style="white-space:pre-wrap">${esc(a.texto)}</div>`
+      : '<div class="banner warn">Ainda sem anotação. O bot cobra às ' + L.lembretes.map(esc).join(', ') + '.</div>'}
+    <div class="field"><textarea id="litTexto" rows="3" style="min-height:80px" placeholder="O que você entendeu da leitura de hoje…"></textarea></div>
+    <button class="btn full" data-acao="liturgia-anotar">${a ? 'Somar à anotação' : 'Anotar'}</button>
+
+    ${L.anotacoes.length ? `<h3 style="margin:18px 0 10px">Anteriores <small>${L.anotacoes.length}</small></h3>
+      <div class="rows">${L.anotacoes.slice(1, 9).map((x) => `<button class="row-item" data-acao="liturgia-ver" data-data="${esc(x.data)}">
+        <span class="avatar">🙏</span>
+        <span class="grow"><span class="t1">${esc(x.data.split('-').reverse().join('/'))}</span>
+        <span class="t2">${esc(x.texto.replace(/\\n+/g, ' ').slice(0, 60))}</span></span>
+        <span class="chev">›</span></button>`).join('')}</div>` : ''}
+  </div>`
+}
+
 // ---------- grupos ----------
 
 const CATEGORIAS = {
   diversao: '🎲 Diversão',
+  fe: '🙏 Fé',
   grupo: '👥 Grupo',
   midia: '🖼️ Mídia',
   utilidades: '🔧 Utilidades',
@@ -875,6 +922,8 @@ function mais() {
       </div>
     </div>
 
+    ${cardLiturgia()}
+
     ${cardGrupos()}
 
     <div class="card"><h3>Avisos automáticos e backup</h3>
@@ -1013,6 +1062,75 @@ const acoes = {
     if (!await confirmar('Disparar agora os lembretes de hoje de verdade no WhatsApp?', 'Disparar')) return
     const r = await api('/lembretes', { body: { real: true } })
     resultadoCobranca(r.resultados, false); render()
+  },
+
+  // --- liturgia ---
+  'liturgia-anotar': async () => {
+    const texto = $('#litTexto').value.trim()
+    if (!texto) return toast('Escreva alguma coisa.', 'err')
+    await api('/liturgia/anotacao', { body: { texto } })
+    toast('🙏 Anotado.'); render({ manterScroll: true })
+  },
+
+  'liturgia-ver': ({ data }) => {
+    const a = S.liturgia.anotacoes.find((x) => x.data === data)
+    if (!a) return
+    sheet({
+      titulo: `🙏 ${data.split('-').reverse().join('/')}`,
+      corpo: `<div class="msg-preview">${esc(a.texto)}</div>`,
+      acoes: [{
+        label: 'Excluir', classe: 'danger',
+        onClick: async ({ fechar }) => {
+          if (!await confirmar('Excluir essa anotação?', 'Excluir')) return
+          await api(`/liturgia/anotacao/${encodeURIComponent(data)}`, { method: 'DELETE' })
+          fechar(); toast('Excluída.'); render({ manterScroll: true })
+        },
+      }],
+    })
+  },
+
+  'liturgia-ler': async () => {
+    const r = await api('/liturgia/leituras')
+    sheet({
+      titulo: r.liturgia || 'Liturgia de hoje',
+      corpo: r.partes.map((p) => `<div class="msg-preview" style="margin-bottom:12px;max-height:none">${esc(p)}</div>`).join(''),
+      acoes: [{
+        label: '📤 Enviar nos grupos', onClick: async ({ fechar, btn }) => {
+          if (!S.liturgia.grupos.length) return toast('Escolha os grupos primeiro.', 'err')
+          if (!await confirmar(`Enviar as leituras agora em ${S.liturgia.grupos.length} grupo(s)?`, 'Enviar')) return
+          btn.disabled = true
+          const res = await api('/liturgia/enviar', { body: {} })
+          fechar()
+          toast(`📖 ${res.resultados.filter((x) => x.status === 'enviado').length} enviado(s).`)
+        },
+      }],
+    })
+  },
+
+  'liturgia-grupos': () => {
+    const sel = new Set(S.liturgia.grupos)
+    const { bg, fechar } = sheet({
+      titulo: 'Quem recebe as leituras',
+      corpo: S.grupos.lista.length
+        ? `<div class="banner info">Todo dia às ${esc(S.liturgia.horario)}, nos grupos marcados.</div>
+           <div class="chips" style="flex-wrap:wrap">${S.grupos.lista.map((g) => `<button class="chip ${sel.has(g.jid) ? 'on' : ''}" data-g="${esc(g.jid)}">${esc(g.nome)}</button>`).join('')}</div>`
+        : '<div class="empty">Nenhum grupo conhecido ainda.<br>Use um comando num grupo para ele aparecer aqui.</div>',
+      acoes: S.grupos.lista.length ? [{
+        label: 'Salvar', onClick: async ({ btn }) => {
+          btn.disabled = true
+          await api('/liturgia/grupos', { body: { grupos: [...sel] } })
+          fechar(); toast('Salvo.'); render({ manterScroll: true })
+        },
+      }] : [],
+    })
+    $$('[data-g]', bg).forEach((b) => {
+      b.onclick = () => {
+        vibrar()
+        const j = b.dataset.g
+        if (sel.has(j)) sel.delete(j); else sel.add(j)
+        b.classList.toggle('on', sel.has(j))
+      }
+    })
   },
 
   // --- grupos ---

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
 import { AGENDA_FILE } from './agenda.js'
+import { LITURGIA_FILE } from './liturgia.js'
 import { getCard, getPerson, getSettings, raw, setSettings } from './finance.js'
 import { getSock, isOnline, sendText } from './wa.js'
 
@@ -22,7 +23,7 @@ export async function snapshotDiario() {
   mkdirSync(BACKUP_DIR, { recursive: true })
   const feitos = []
 
-  for (const [prefixo, origem] of [['finance', FILE], ['agenda', AGENDA_FILE]]) {
+  for (const [prefixo, origem] of [['finance', FILE], ['agenda', AGENDA_FILE], ['liturgia', LITURGIA_FILE]]) {
     if (!existsSync(origem)) continue
     const destino = path.join(BACKUP_DIR, `${prefixo}-${hojeISO()}.json`)
     if (!existsSync(destino)) {

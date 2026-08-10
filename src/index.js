@@ -12,6 +12,7 @@ import { initFinance } from './lib/finance.js'
 import { arroba, limparCache, metadados } from './lib/grupo.js'
 import { getGrupo, initGrupos, registrarGrupo } from './lib/grupos.js'
 import { iniciarAgendaScheduler } from './lib/lembretes.js'
+import { iniciarLiturgiaScheduler, initLiturgia } from './lib/liturgia.js'
 import { setSock } from './lib/wa.js'
 import { iniciarPainel } from './web/server.js'
 
@@ -83,8 +84,10 @@ async function start() {
 initFinance()
 initAgenda()
 initGrupos()
+initLiturgia()
 await loadCommands()
 iniciarPainel()
 iniciarAgendador()
 iniciarAgendaScheduler()
+iniciarLiturgiaScheduler()
 await start()

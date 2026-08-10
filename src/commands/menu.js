@@ -7,6 +7,7 @@ const SECOES = [
   ['diversao', '🎲 Diversão'],
   ['grupo', '👥 Grupo'],
   ['midia', '🖼️ Figurinhas e mídia'],
+  ['fe', '🙏 Fé'],
   ['utilidades', '🔧 Utilidades'],
   ['financeiro', '💳 Financeiro'],
   ['agenda', '📅 Agenda'],
@@ -14,7 +15,7 @@ const SECOES = [
 
 const APELIDO = {
   financeiro: 'financeiro', agenda: 'agenda', diversao: 'diversão',
-  grupo: 'grupo', midia: 'mídia', utilidades: 'utilidades',
+  grupo: 'grupo', midia: 'mídia', utilidades: 'utilidades', fe: 'fé',
 }
 
 const semAcento = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '')

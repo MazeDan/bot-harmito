@@ -51,6 +51,26 @@ Prefixos aceitos: `/`, `!` e `.`
 | `/roubar` · `/toimg` | Figurinha com o pack do bot · figurinha vira imagem/gif |
 | `/audio` | Responda a um vídeo — devolve o mp3. `/audio voz` manda como mensagem de voz; `/audio 0:10 0:35` corta o trecho |
 
+### 🙏 Fé — liturgia diária
+
+| Comando | O que faz |
+|---|---|
+| `/liturgia` | Leituras católicas de hoje: 1ª leitura, salmo, 2ª leitura (quando tem) e evangelho. Aceita `/liturgia ontem`, `/liturgia amanhã`, `/liturgia 12/09` |
+| `/liturgia aqui` | Liga o envio diário **neste grupo** — dono do bot ou admin |
+| `/liturgia off` · `/liturgia grupos` | Desliga aqui · lista onde está ligado |
+| `/ld <texto>` | Anota o que você entendeu da leitura de hoje. Mandar de novo **soma** ao que já estava |
+| `/ld` | Mostra a anotação de hoje (ou as referências, se ainda não anotou) |
+| `/ld lista` · `/ld ver 09/08` | Últimas anotações · abre uma inteira |
+| `/ld trocar ...` · `/ld apagar` · `/ld ontem ...` | Substitui em vez de somar · apaga · anota em outro dia |
+
+**Todo dia às 06:00** o bot manda as leituras nos grupos que você escolher (no painel ou com `/liturgia aqui`). Cada leitura vai numa mensagem separada, que lê melhor no WhatsApp.
+
+**Se você não mandar o `/ld`**, ele cobra às **12:00**, às **18:00** e às **21:00** — sempre com as referências do dia junto. Assim que você anota, as cobranças seguintes param. O bot conta a sua sequência de dias seguidos.
+
+Fonte das leituras: [liturgia.up.railway.app](https://liturgia.up.railway.app/v2/). O resultado fica em cache por dia, então a API é consultada uma vez só; se ela falhar, tenta 3 vezes antes de desistir.
+
+Ajuste com `LITURGIA_HORARIO` (padrão `06:00`), `LITURGIA_LEMBRETES` (padrão `12:00,18:00,21:00`), `LITURGIA_UNICA=1` (tudo numa mensagem só) e `LITURGIA_ATIVA=0`.
+
 ### 🔧 Utilidades
 
 `/menu` · `/ping`

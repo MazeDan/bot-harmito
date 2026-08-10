@@ -48,6 +48,18 @@ export const config = {
     intervaloMs: [8_000, 20_000],
   },
 
+  // Liturgia diária católica
+  liturgia: {
+    ativo: process.env.LITURGIA_ATIVA !== '0',
+    // Envio das leituras nos grupos escolhidos
+    horario: process.env.LITURGIA_HORARIO || '06:00',
+    // Cobranças do /ld, na ordem. Só disparam se você ainda não anotou.
+    lembretes: (process.env.LITURGIA_LEMBRETES || '12:00,18:00,21:00').split(',').map((h) => h.trim()),
+    // true = tudo numa mensagem só; false = uma por leitura (lê melhor)
+    mensagemUnica: process.env.LITURGIA_UNICA === '1',
+    api: process.env.LITURGIA_API || 'https://liturgia.up.railway.app/v2/',
+  },
+
   // Agenda: lembretes, tarefas e o resumo da manhã
   agenda: {
     ativo: process.env.AGENDA_ATIVA !== '0',
