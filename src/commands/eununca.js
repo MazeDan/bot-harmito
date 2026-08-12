@@ -3,6 +3,7 @@ import { EU_NUNCA, sortear1 } from '../lib/jogos.js'
 export default {
   name: 'eununca',
   aliases: ['eununcaja', 'nunca'],
+  resumo: 'sorteia um "eu nunca" pro grupo',
   description: 'Sorteia um "eu nunca" para o grupo responder',
   categoria: 'jogos',
 

@@ -6,6 +6,7 @@ const MEDALHAS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
 export default {
   name: 'ranking',
   aliases: ['top', 'podio', 'pódio'],
+  resumo: 'pódio do dia no grupo',
   description: 'Pódio do dia no grupo: /ranking [tema] — ex.: /ranking mais dorminhoco',
   categoria: 'grupo',
 

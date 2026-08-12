@@ -1,6 +1,7 @@
 export default {
   name: 'dado',
   aliases: ['roll'],
+  resumo: 'joga um dado (ou /dado 20)',
   description: 'Joga um dado de 6 lados (ou /dado 20 para um d20)',
   categoria: 'diversao',
 

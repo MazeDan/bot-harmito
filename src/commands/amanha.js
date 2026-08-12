@@ -4,6 +4,7 @@ import { montarResumoDia } from '../lib/lembretes.js'
 export default {
   name: 'amanha',
   aliases: ['amanhã'],
+  resumo: 'a agenda de amanhã',
   description: 'A agenda de amanhã',
   categoria: 'agenda',
   dono: true,

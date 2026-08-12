@@ -9,6 +9,7 @@ const mesBR = (ym) => {
 export default {
   name: 'contas',
   aliases: ['saldos', 'resumo', 'deve'],
+  resumo: 'resumo geral de quem te deve',
   description: 'Resumo geral: quanto cada um te deve + total por conta bancária',
   categoria: 'financeiro',
   dono: true,

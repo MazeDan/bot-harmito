@@ -3,6 +3,7 @@ import { arroba, metadados } from '../lib/grupo.js'
 export default {
   name: 'admins',
   aliases: ['adm', 'staff'],
+  resumo: 'lista os administradores',
   description: 'Lista os administradores do grupo',
   categoria: 'grupo',
 

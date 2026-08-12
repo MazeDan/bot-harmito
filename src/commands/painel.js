@@ -3,6 +3,7 @@ import { painelSenhaAutomatica, painelURL } from '../web/server.js'
 export default {
   name: 'painel',
   aliases: ['dashboard', 'web'],
+  resumo: 'link do painel web',
   description: 'Mostra o link do painel web de controle financeiro',
   categoria: 'financeiro',
   dono: true,

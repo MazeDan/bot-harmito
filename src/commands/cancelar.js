@@ -3,6 +3,7 @@ import { pendentes } from './lote.js'
 export default {
   name: 'cancelar',
   aliases: ['cancela'],
+  resumo: 'descarta o lote pendente',
   description: 'Descarta o lote de lançamentos pendente',
   categoria: 'financeiro',
   dono: true,

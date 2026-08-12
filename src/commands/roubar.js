@@ -4,6 +4,7 @@ import { rebrandSticker } from '../lib/sticker.js'
 export default {
   name: 'roubar',
   aliases: ['steal', 'rename'],
+  resumo: 'figurinha volta com meu pack',
   description: 'Rouba uma figurinha: responda a uma figurinha e ela volta com o pack do bot',
   categoria: 'midia',
   heavy: true,

@@ -6,6 +6,7 @@ const VALIDADE_MS = 10 * 60 * 1000
 export default {
   name: 'confirmar',
   aliases: ['ok', 'confirma'],
+  resumo: 'confirma o lote pendente',
   description: 'Confirma o último lote de lançamentos enviado com /lote',
   categoria: 'financeiro',
   dono: true,

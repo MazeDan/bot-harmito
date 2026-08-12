@@ -3,6 +3,7 @@ import { montarFimDeSemana, montarSemana } from '../lib/lembretes.js'
 export default {
   name: 'semana',
   aliases: ['proximos', 'próximos', 'fds'],
+  resumo: 'os próximos 7 dias',
   description: 'Visão dos próximos 7 dias (ou /semana fds para o fim de semana)',
   categoria: 'agenda',
   dono: true,

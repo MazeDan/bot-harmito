@@ -115,6 +115,7 @@ const formatar = (n) =>
 export default {
   name: 'calc',
   aliases: ['calcular', 'conta-de', 'matematica'],
+  resumo: 'faz a conta pra você',
   description: 'Faz a conta: /calc 1500*0,13 (aceita %, parênteses, raiz(), potência ^)',
   categoria: 'utilidades',
 

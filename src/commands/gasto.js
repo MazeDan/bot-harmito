@@ -10,6 +10,7 @@ const mesBR = (ym) => {
 export default {
   name: 'gasto',
   aliases: ['item', 'lancar', 'add', 'compra'],
+  resumo: 'lança um gasto',
   description: 'Lança um gasto: /gasto 22 danilo nubank lanche (aceita 3x e data 12/07)',
   categoria: 'financeiro',
   dono: true,

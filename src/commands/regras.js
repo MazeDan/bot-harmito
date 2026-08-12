@@ -4,6 +4,7 @@ import { atualizarGrupo, getGrupo, registrarGrupo } from '../lib/grupos.js'
 export default {
   name: 'regras',
   aliases: ['regra'],
+  resumo: 'mostra ou define as regras',
   description: 'Mostra as regras do grupo. Admin define com /regras set <texto>',
   categoria: 'grupo',
 

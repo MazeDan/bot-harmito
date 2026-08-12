@@ -9,6 +9,7 @@ import { downloadMedia, findMedia } from '../lib/media.js'
 export default {
   name: 'toimg',
   aliases: ['togif', 'imagem'],
+  resumo: 'figurinha vira imagem ou gif',
   description: 'Transforma figurinha de volta em imagem (ou gif, se for animada) — responda a uma figurinha',
   categoria: 'midia',
   heavy: true,

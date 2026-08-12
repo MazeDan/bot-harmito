@@ -1,6 +1,7 @@
 export default {
   name: 'feio',
   aliases: ['feia'],
+  resumo: 'mede o quanto a pessoa é feia',
   description: 'Mede o quanto a pessoa é feia (marque alguém: /feio @fulano)',
   categoria: 'diversao',
 

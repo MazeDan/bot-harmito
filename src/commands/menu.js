@@ -48,6 +48,7 @@ const DICAS = [
 export default {
   name: 'menu',
   aliases: ['help', 'ajuda', 'comandos', 'oi'],
+  resumo: 'esta lista aqui',
   description: 'Mostra tudo que eu sei fazer aqui (/menu jogos detalha uma seção)',
   categoria: 'utilidades',
   sempre: true, // nunca é bloqueado por configuração de grupo
@@ -63,14 +64,32 @@ export default {
     const daSecao = (id) =>
       visiveis.filter((c) => (c.categoria ?? 'utilidades') === id).sort((a, b) => a.name.localeCompare(b.name))
 
-    // ---- /menu jogos → detalha uma seção ----
-    const filtro = semAcento((args[0] || '').toLowerCase())
+    const filtro = semAcento((args[0] || '').toLowerCase().replace(/^[/!.]/, ''))
+
+    // ---- /menu forca → explica um comando só ----
     if (filtro) {
+      const cmd = commands.get(filtro)
+      if (cmd && visiveis.includes(cmd)) {
+        const secao = SECOES.find(([id]) => id === (cmd.categoria ?? 'utilidades'))
+        const outrosNomes = (cmd.aliases ?? []).filter((a) => a !== cmd.name)
+        return sock.sendMessage(chatId, {
+          text:
+            `${secao?.[1] ?? '🔧'} */${cmd.name}*\n_${cmd.resumo ?? ''}_\n` +
+            `━━━━━━━━━━━━━━━\n\n${cmd.description}\n\n` +
+            (outrosNomes.length ? `🔁 _Também responde por:_ ${outrosNomes.map((a) => `/${a}`).join(', ')}\n` : '') +
+            (cmd.dono ? '🔒 _Só o dono usa, e só no privado._\n' : '') +
+            (cmd.heavy ? '⏳ _Demora um pouco: entra na fila de mídia._\n' : '') +
+            `📂 _Seção: ${secao?.[2] ?? 'Utilidades'} — veja as outras com_ \`/menu ${secao?.[0] ?? ''}\``,
+        }, { quoted: msg })
+      }
+
+      // ---- /menu jogos → detalha uma seção ----
       const alvo = SECOES.find(([id]) => id.startsWith(filtro) || semAcento(APELIDO[id]).startsWith(filtro))
       if (!alvo) {
         throw new Error(
-          `Não conheço a seção *${args[0]}*. 🤔\n\n` +
-          `Tenho estas:\n${SECOES.map(([id, ic, nome]) => `${ic} ${nome.toLowerCase()}`).join('\n')}`,
+          `Não conheço *${args[0]}*. 🤔\n\n` +
+          `Peça uma seção:\n${SECOES.map(([id, ic, nome]) => `${ic} \`/menu ${id}\` — ${nome.toLowerCase()}`).join('\n')}\n\n` +
+          '_Ou um comando: `/menu forca`._',
         )
       }
       const [id, icone, nome, frase] = alvo
@@ -95,7 +114,8 @@ export default {
     for (const [id, icone, nome] of SECOES) {
       const lista = daSecao(id)
       if (!lista.length) continue
-      texto += `\n${icone} *${nome}*\n${lista.map((c) => `/${c.name}`).join(' · ')}\n`
+      texto += `\n${icone} *${nome}*\n`
+      texto += lista.map((c) => `\`/${c.name}\` — ${c.resumo ?? c.description}`).join('\n') + '\n'
     }
 
     texto += '\n━━━━━━━━━━━━━━━\n'
@@ -104,12 +124,12 @@ export default {
     if (emGrupo) {
       // separa "não vale em grupo" de "o dono desligou aqui" — são coisas diferentes
       const bloqueadosNoGrupo = unicos.filter((c) => !c.dono && !permitido(c, chatId).ok).length
-      if (bloqueadosNoGrupo) texto += ` · ${bloqueadosNoGrupo} desligados neste grupo`
+      if (bloqueadosNoGrupo) texto += ` · ${bloqueadosNoGrupo} desligado${bloqueadosNoGrupo > 1 ? 's' : ''} neste grupo`
     }
     texto += '\n'
 
     texto += `\n💡 _Dica: ${DICAS[Math.floor(Math.random() * DICAS.length)]}._`
-    texto += '\n📂 _`/menu jogos` mostra o que cada um faz._'
+    texto += '\n❓ _`/menu forca` explica um comando · `/menu jogos` detalha a seção._'
     if (emGrupo) texto += '\n⚙️ _`/infogrupo` mostra o que está liberado aqui._'
 
     await sock.sendMessage(chatId, { text: texto }, { quoted: msg })

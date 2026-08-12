@@ -1,6 +1,7 @@
 export default {
   name: 'escolher',
   aliases: ['escolha', 'pick'],
+  resumo: 'escolhe uma opção por você',
   description: 'Escolhe uma opção por você: /escolher pizza, hambúrguer, sushi',
   categoria: 'diversao',
 

@@ -15,6 +15,7 @@ const rotulo = {
 export default {
   name: 'cobrar',
   aliases: ['cobranca', 'avisar'],
+  resumo: 'cobra quem deve no cartão',
   description: 'Cobra quem deve num cartão: /cobrar nubank [2026-09] [real]',
   categoria: 'financeiro',
   dono: true,

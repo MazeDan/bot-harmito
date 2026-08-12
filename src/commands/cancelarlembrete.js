@@ -3,6 +3,7 @@ import { buscar, proximos, remover } from '../lib/agenda.js'
 export default {
   name: 'cancelarlembrete',
   aliases: ['apagarlembrete', 'dellembrete'],
+  resumo: 'apaga um item da agenda',
   description: 'Apaga um item da agenda: /cancelarlembrete 3',
   categoria: 'agenda',
   dono: true,

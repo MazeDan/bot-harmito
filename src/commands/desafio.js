@@ -4,6 +4,7 @@ import { arroba, mencionados } from '../lib/grupo.js'
 export default {
   name: 'desafio',
   aliases: ['dare'],
+  resumo: 'sorteia um desafio',
   description: 'Sorteia um desafio (marque alguém para direcionar)',
   categoria: 'diversao',
 

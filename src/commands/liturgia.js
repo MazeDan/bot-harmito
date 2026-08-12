@@ -8,6 +8,7 @@ import { alternarGrupo, buscarLeituras, enviarLeituras, gruposDaLiturgia } from 
 export default {
   name: 'liturgia',
   aliases: ['leituras', 'leitura', 'missa', 'evangelho'],
+  resumo: 'leituras católicas do dia',
   description: 'Leituras católicas do dia. /liturgia aqui liga o envio diário neste grupo',
   categoria: 'fe',
 

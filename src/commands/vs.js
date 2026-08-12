@@ -4,6 +4,7 @@ import { DUELOS, sortear1 } from '../lib/conteudo.js'
 export default {
   name: 'vs',
   aliases: ['duelo', 'briga'],
+  resumo: 'duelo narrado entre dois',
   description: 'Duelo entre dois: /vs @fulano @beltrano (ou /vs @fulano)',
   categoria: 'grupo',
 

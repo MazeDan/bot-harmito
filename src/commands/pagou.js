@@ -3,6 +3,7 @@ import { addPayment, getCard, money } from '../lib/finance.js'
 export default {
   name: 'pagou',
   aliases: ['pago', 'pagar', 'recebi'],
+  resumo: 'registra pagamento recebido',
   description: 'Registra um pagamento recebido: /pagou 50 danilo [nubank]',
   categoria: 'financeiro',
   dono: true,

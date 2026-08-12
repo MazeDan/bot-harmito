@@ -3,6 +3,7 @@ import { arroba, participantes, sortear } from '../lib/grupo.js'
 export default {
   name: 'quem',
   aliases: ['quemvai'],
+  resumo: 'sorteia alguém para a sua pergunta',
   description: 'Sorteia alguém para uma pergunta: /quem vai pagar a conta?',
   categoria: 'grupo',
 

@@ -1,6 +1,7 @@
 export default {
   name: 'enquete',
   aliases: ['votacao', 'votação', 'poll'],
+  resumo: 'cria enquete de votar',
   description: 'Cria uma enquete: /enquete Vamos sair? | sim | não | talvez',
   categoria: 'grupo',
 

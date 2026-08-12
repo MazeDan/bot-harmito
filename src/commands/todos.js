@@ -3,6 +3,7 @@ import { arroba, ehAdmin, participantes } from '../lib/grupo.js'
 export default {
   name: 'todos',
   aliases: ['all', 'geral', 'marcar'],
+  resumo: 'marca todo mundo (só admin)',
   description: 'Marca todo mundo do grupo: /todos [recado] — só admin',
   categoria: 'grupo',
 

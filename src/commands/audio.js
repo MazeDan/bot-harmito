@@ -10,6 +10,7 @@ const MAX_BYTES = 16 * 1024 * 1024 // o WhatsApp rejeita documentos de áudio mu
 export default {
   name: 'audio',
   aliases: ['mp3', 'som'],
+  resumo: 'tira o áudio de um vídeo',
   description: 'Tira o áudio de um vídeo (mp3) — responda a um vídeo ou mande com a legenda /audio',
   categoria: 'midia',
   heavy: true,

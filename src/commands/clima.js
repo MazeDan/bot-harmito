@@ -22,6 +22,7 @@ const buscar = async (url) => {
 export default {
   name: 'clima',
   aliases: ['tempo', 'previsao', 'previsão'],
+  resumo: 'previsão do tempo',
   description: 'Previsão do tempo: /clima Salvador',
   categoria: 'utilidades',
 

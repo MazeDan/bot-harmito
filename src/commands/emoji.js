@@ -7,6 +7,7 @@ const VALIDADE_MS = 5 * 60_000
 export default {
   name: 'emoji',
   aliases: ['emojis', 'adivinheoemoji'],
+  resumo: 'adivinhe o filme pelos emojis',
   description: 'Adivinhe o que os emojis querem dizer: /emoji começa, /emoji rei leão responde',
   categoria: 'jogos',
 

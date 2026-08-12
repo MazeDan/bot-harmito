@@ -7,6 +7,7 @@ const VALIDADE_MS = 5 * 60_000
 export default {
   name: 'palavra',
   aliases: ['anagrama', 'embaralhada'],
+  resumo: 'desembaralhe o anagrama',
   description: 'Desembaralhe a palavra: /palavra começa, /palavra abacaxi responde',
   categoria: 'jogos',
 

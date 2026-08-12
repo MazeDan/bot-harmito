@@ -14,7 +14,10 @@ Na primeira vez, vai aparecer um **QR code no terminal** — escaneie com o What
 
 ## Comandos
 
-`/menu` lista o que está disponível **naquele chat**, agrupado por seção. `/menu diversão` detalha uma seção.
+`/menu` lista o que está disponível **naquele chat**, agrupado por seção e com uma linha explicando cada comando. Para se aprofundar:
+
+- `/menu jogos` — detalha uma seção inteira, com a forma de usar de cada comando
+- `/menu forca` — explica **um comando**: o que faz, como usar, por quais outros nomes ele atende, e se é só do dono
 
 Prefixos aceitos: `/`, `!` e `.`
 

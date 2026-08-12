@@ -11,6 +11,7 @@ export default {
   name: 'fatura',
   // '/f' ficou para as figurinhas, que é o uso mais frequente
   aliases: ['fat'],
+  resumo: 'detalha uma fatura',
   description: 'Detalha a fatura de um cartão: /fatura nubank [2026-09]',
   categoria: 'financeiro',
   dono: true,

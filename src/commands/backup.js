@@ -5,6 +5,7 @@ import { getSettings } from '../lib/finance.js'
 export default {
   name: 'backup',
   aliases: ['exportar', 'csv'],
+  resumo: 'manda o backup agora',
   description: 'Manda agora o backup dos dados financeiros (.json e .csv)',
   categoria: 'financeiro',
   dono: true,

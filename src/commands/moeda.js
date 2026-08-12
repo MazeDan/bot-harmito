@@ -1,6 +1,7 @@
 export default {
   name: 'moeda',
   aliases: ['coin', 'caraoucoroa'],
+  resumo: 'cara ou coroa',
   description: 'Cara ou coroa',
   categoria: 'diversao',
 

@@ -4,6 +4,7 @@ import { sortear } from '../lib/grupo.js'
 export default {
   name: 'sorteio',
   aliases: ['sortear', 'rifa'],
+  resumo: 'sorteia alguém, ou entre opções',
   description: 'Sorteia alguém do grupo: /sorteio [quantidade] — ou /sorteio a, b, c',
   categoria: 'grupo',
 

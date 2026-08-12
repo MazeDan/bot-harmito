@@ -10,6 +10,7 @@ const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digi
 export default {
   name: 'eu',
   aliases: ['minhaparte', 'souEu'],
+  resumo: 'marca quem é você e mostra sua parte',
   description: 'Marca quem é você e mostra quanto da fatura é seu: /eu danilo',
   categoria: 'financeiro',
   dono: true,

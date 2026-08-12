@@ -3,6 +3,7 @@ import { deletePerson, listPeople, upsertPerson } from '../lib/finance.js'
 export default {
   name: 'pessoa',
   aliases: ['pessoas', 'contato'],
+  resumo: 'vincula o telefone de alguém',
   description: 'Vincula o telefone de alguém (pra cobrança): /pessoa danilo 11999998888',
   categoria: 'financeiro',
   dono: true,

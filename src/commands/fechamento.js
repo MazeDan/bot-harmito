@@ -4,6 +4,7 @@ import { getCard, getSettings, listCards } from '../lib/finance.js'
 export default {
   name: 'fechamento',
   aliases: ['fechou'],
+  resumo: 'prévia do aviso de fatura fechada',
   description: 'Mostra a prévia do aviso de fatura fechada: /fechamento nubank',
   categoria: 'financeiro',
   dono: true,

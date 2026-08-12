@@ -8,6 +8,7 @@ const VALIDADE_MS = 10 * 60_000
 export default {
   name: 'roleta',
   aliases: ['roletarussa'],
+  resumo: 'roleta russa de brincadeira',
   description: 'Roleta russa de brincadeira: 6 câmaras, uma "bala". Só um clique por vez',
   categoria: 'jogos',
 

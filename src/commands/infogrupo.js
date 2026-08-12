@@ -9,6 +9,7 @@ const CATEGORIAS = {
 export default {
   name: 'infogrupo',
   aliases: ['grupo', 'info'],
+  resumo: 'dados do grupo e o que está liberado',
   description: 'Mostra os dados do grupo e o que está liberado aqui',
   categoria: 'grupo',
 

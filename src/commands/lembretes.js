@@ -4,6 +4,7 @@ import { linhaItem } from '../lib/lembretes.js'
 export default {
   name: 'lembretes',
   aliases: ['tarefas', 'compromissos', 'pendencias', 'pendências'],
+  resumo: 'lista os próximos',
   description: 'Lista os próximos compromissos e tarefas, com o número de cada um',
   categoria: 'agenda',
   dono: true,

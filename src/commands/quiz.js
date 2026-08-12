@@ -8,6 +8,7 @@ const LETRAS = ['A', 'B', 'C', 'D']
 export default {
   name: 'quiz',
   aliases: ['pergunta', 'trivia'],
+  resumo: 'pergunta de conhecimentos gerais',
   description: 'Pergunta de conhecimentos gerais: /quiz — responda com /quiz b',
   categoria: 'jogos',
 

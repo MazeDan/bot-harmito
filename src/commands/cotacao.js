@@ -18,6 +18,7 @@ const real = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', curre
 export default {
   name: 'cotacao',
   aliases: ['cotação', 'dolar', 'cambio', 'moedas'],
+  resumo: 'dólar, euro e bitcoin de hoje',
   description: 'Cotação do dia: /cotacao (dólar, euro e bitcoin) ou /cotacao libra',
   categoria: 'utilidades',
 

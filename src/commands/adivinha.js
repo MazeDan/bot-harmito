@@ -5,6 +5,7 @@ const LIMITE_MS = 15 * 60_000
 export default {
   name: 'adivinha',
   aliases: ['adivinhar', 'numero', 'número'],
+  resumo: 'adivinhe o número que eu pensei',
   description: 'Jogo: eu penso num número e você tenta. /adivinha para começar, /adivinha 42 para chutar',
   categoria: 'jogos',
 

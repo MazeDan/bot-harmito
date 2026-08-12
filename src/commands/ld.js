@@ -13,6 +13,7 @@ const paraISO = (txt) => {
 export default {
   name: 'ld',
   aliases: ['leituradodia', 'reflexao', 'reflexão'],
+  resumo: 'anota o que entendeu da leitura',
   description: 'Anota o que você entendeu da leitura do dia: /ld hoje entendi que...',
   categoria: 'fe',
   dono: true,

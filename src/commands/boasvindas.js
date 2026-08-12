@@ -4,6 +4,7 @@ import { atualizarGrupo, getGrupo, registrarGrupo } from '../lib/grupos.js'
 export default {
   name: 'boasvindas',
   aliases: ['bemvindo', 'welcome'],
+  resumo: 'saúda quem entra no grupo',
   description: 'Liga/desliga a saudação a quem entra no grupo — só admin',
   categoria: 'grupo',
 

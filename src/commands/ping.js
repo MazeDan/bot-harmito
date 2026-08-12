@@ -1,6 +1,7 @@
 export default {
   name: 'ping',
   aliases: ['status'],
+  resumo: 'testa se eu estou online',
   description: 'Verifica se o bot está online e o tempo de resposta',
   categoria: 'utilidades',
 

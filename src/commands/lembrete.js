@@ -20,6 +20,7 @@ const ajuda =
 export default {
   name: 'lembrete',
   aliases: ['lembrar', 'lembra', 'tarefa', 'compromisso', 'anotar'],
+  resumo: 'anota compromisso ou tarefa',
   description: 'Anota um compromisso ou tarefa: /lembrete amanhã 09:00 pagar faculdade',
   categoria: 'agenda',
   dono: true,

@@ -21,6 +21,7 @@ const exemplo =
 export default {
   name: 'lote',
   aliases: ['lancar-lote', 'batch'],
+  resumo: 'lança vários gastos de uma vez',
   description: 'Lança vários gastos de uma vez (mensagem de várias linhas)',
   categoria: 'financeiro',
   dono: true,

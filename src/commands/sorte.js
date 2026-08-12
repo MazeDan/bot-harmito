@@ -14,6 +14,7 @@ const RESPOSTAS = [
 export default {
   name: 'sorte',
   aliases: ['8ball', 'bola8'],
+  resumo: 'bola 8 mágica responde qualquer pergunta',
   description: 'Bola 8 mágica: faça uma pergunta de sim ou não — /sorte vou ficar rico?',
   categoria: 'diversao',
 

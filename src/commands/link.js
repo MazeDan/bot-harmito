@@ -3,6 +3,7 @@ import { botEhAdmin, ehAdmin, metadados } from '../lib/grupo.js'
 export default {
   name: 'link',
   aliases: ['convite'],
+  resumo: 'link de convite (só admin)',
   description: 'Pega o link de convite do grupo — só admin',
   categoria: 'grupo',
 

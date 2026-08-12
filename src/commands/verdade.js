@@ -4,6 +4,7 @@ import { arroba, mencionados } from '../lib/grupo.js'
 export default {
   name: 'verdade',
   aliases: ['truth'],
+  resumo: 'sorteia uma pergunta de verdade',
   description: 'Sorteia uma pergunta de verdade (marque alguém para direcionar)',
   categoria: 'diversao',
 

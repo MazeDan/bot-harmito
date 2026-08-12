@@ -19,6 +19,7 @@ function lerModo(args) {
 export default {
   name: 'fig',
   aliases: ['f', 's', 'sticker', 'figurinha'],
+  resumo: 'imagem ou vídeo vira figurinha',
   description: 'Cria figurinha de imagem, vídeo ou gif. Manda a quadrada e a inteira (ou /fig q, /fig i)',
   categoria: 'midia',
   heavy: true,

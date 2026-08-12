@@ -1,6 +1,7 @@
 export default {
   name: 'cep',
   aliases: ['endereco', 'endereço'],
+  resumo: 'endereço de um CEP',
   description: 'Consulta um CEP: /cep 40010-000',
   categoria: 'utilidades',
 

@@ -26,6 +26,7 @@ function painel(j) {
 export default {
   name: 'forca',
   aliases: ['jogodaforca'],
+  resumo: 'jogo da forca, com boneco e dica',
   description: 'Jogo da forca. /forca começa, /forca a chuta uma letra, /forca abacaxi chuta a palavra',
   categoria: 'jogos',
 

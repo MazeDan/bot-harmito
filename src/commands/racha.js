@@ -6,6 +6,7 @@ const numero = (t) => Number(String(t).replace(/[r$\s]/gi, '').replace(/\./g, ''
 export default {
   name: 'racha',
   aliases: ['dividir', 'rachar', 'vaquinha'],
+  resumo: 'divide a conta do rolê',
   description: 'Divide a conta: /racha 180 4 — ou /racha 180 10% para incluir a gorjeta',
   categoria: 'utilidades',
 

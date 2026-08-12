@@ -13,6 +13,7 @@ const GANHA_DE = {
 export default {
   name: 'ppt',
   aliases: ['jokenpo'],
+  resumo: 'pedra, papel e tesoura contra mim',
   description: 'Pedra, papel e tesoura contra o bot: /ppt pedra',
   categoria: 'diversao',
 

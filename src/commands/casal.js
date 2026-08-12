@@ -13,6 +13,7 @@ const VEREDICTO = [
 export default {
   name: 'casal',
   aliases: ['shipdodia', 'casaldodia'],
+  resumo: 'sorteia o casal do dia',
   description: 'Sorteia o casal do dia no grupo (o mesmo até amanhã)',
   categoria: 'jogos',
 

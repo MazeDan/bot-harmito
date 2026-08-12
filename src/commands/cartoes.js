@@ -9,6 +9,7 @@ const mesBR = (ym) => {
 export default {
   name: 'cartoes',
   aliases: ['cards'],
+  resumo: 'faturas e vencimentos',
   description: 'Lista os cartões com a fatura atual e quanto falta pro vencimento',
   categoria: 'financeiro',
   dono: true,

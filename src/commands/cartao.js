@@ -24,6 +24,7 @@ function lerOpcoes(args) {
 export default {
   name: 'cartao',
   aliases: ['card'],
+  resumo: 'cadastra e edita cartões',
   description: 'Cadastra e edita cartões: /cartao add nubank fecha 3 vence 10',
   categoria: 'financeiro',
   dono: true,

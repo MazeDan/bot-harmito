@@ -5,6 +5,7 @@ const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digi
 export default {
   name: 'conta',
   aliases: ['extratopessoa', 'ver'],
+  resumo: 'extrato de uma pessoa',
   description: 'Mostra o extrato de uma pessoa: /conta danilo',
   categoria: 'financeiro',
   dono: true,

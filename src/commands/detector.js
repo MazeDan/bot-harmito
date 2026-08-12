@@ -4,6 +4,7 @@ import { arroba, mencionados } from '../lib/grupo.js'
 export default {
   name: 'detector',
   aliases: ['mentira', 'poligrafo'],
+  resumo: 'detector de mentiras',
   description: 'Detector de mentiras: responda a uma mensagem com /detector',
   categoria: 'jogos',
 

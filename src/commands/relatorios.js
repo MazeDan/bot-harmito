@@ -5,6 +5,7 @@ import { getSettings, listCards, setSettings } from '../lib/finance.js'
 export default {
   name: 'relatorios',
   aliases: ['relatorio', 'dono', 'aqui'],
+  resumo: 'marca este chat para os avisos',
   description: 'Marca este chat para receber fechamento de fatura e backup automático',
   categoria: 'financeiro',
   dono: true,

@@ -16,6 +16,7 @@ function faltaPara(hhmm, agora = new Date()) {
 export default {
   name: 'horario',
   aliases: ['hora', 'horarios', 'relogio'],
+  resumo: 'minha hora e as rotinas do dia',
   description: 'Mostra a hora do bot e quando cada rotina automática dispara',
   categoria: 'utilidades',
 
