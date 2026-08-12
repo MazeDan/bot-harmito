@@ -8,7 +8,7 @@ const DATA_DIR = path.join(__dirname, '..', '..', 'data')
 export const GRUPOS_FILE = path.join(DATA_DIR, 'grupos.json')
 
 /** Categorias liberadas por padrão num grupo novo */
-const PADRAO = ['diversao', 'grupo', 'midia', 'utilidades']
+const PADRAO = ['diversao', 'jogos', 'grupo', 'midia', 'utilidades']
 
 const vazio = () => ({
   version: 1,

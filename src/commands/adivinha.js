@@ -6,7 +6,7 @@ export default {
   name: 'adivinha',
   aliases: ['adivinhar', 'numero', 'número'],
   description: 'Jogo: eu penso num número e você tenta. /adivinha para começar, /adivinha 42 para chutar',
-  categoria: 'diversao',
+  categoria: 'jogos',
 
   async run({ sock, msg, chatId, userId, args }) {
     const jogo = jogos.get(chatId)

@@ -1,3 +1,5 @@
+// Precisa ser o PRIMEIRO import: acerta o fuso antes de qualquer Date existir.
+import './tz.js'
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,

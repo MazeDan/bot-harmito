@@ -9,7 +9,7 @@ export default {
   name: 'quiz',
   aliases: ['pergunta', 'trivia'],
   description: 'Pergunta de conhecimentos gerais: /quiz — responda com /quiz b',
-  categoria: 'diversao',
+  categoria: 'jogos',
 
   async run({ sock, msg, chatId, args }) {
     const aberta = abertas.get(chatId)

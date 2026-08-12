@@ -1,6 +1,6 @@
 export default {
   name: 'ship',
-  aliases: ['casal'],
+  aliases: [],
   description: 'Mede o casal: /ship @fulano @ciclano (ou marque só uma pessoa para shippar com você)',
   categoria: 'diversao',
 

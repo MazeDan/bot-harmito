@@ -23,10 +23,22 @@ Prefixos aceitos: `/`, `!` e `.`
 | Comando | O que faz |
 |---|---|
 | `/dado` · `/moeda` · `/ppt pedra` | Dado (`/dado 20`), cara ou coroa, pedra-papel-tesoura |
-| `/adivinha` | Penso num número e você tenta — `/adivinha 42` chuta, eu digo se é maior ou menor |
-| `/quiz` | Pergunta de conhecimentos gerais; responda com `/quiz b` |
 | `/verdade` · `/desafio` | Verdade ou desafio (marque alguém para direcionar) |
 | `/feio` · `/gado` · `/ship` · `/sorte` · `/escolher` | Os medidores de sempre |
+
+### 🕹️ Jogos
+
+| Comando | O que faz |
+|---|---|
+| `/forca` | Jogo da forca com boneco desenhado. `/forca a` chuta letra, `/forca abacaxi` arrisca a palavra. 6 vidas, 48 palavras com dica |
+| `/emoji` | Adivinhe o que os emojis querem dizer. `/emoji rei leão` responde, `/emoji desisto` entrega |
+| `/palavra` | Desembaralhe o anagrama, com dica e número de letras |
+| `/adivinha` | Penso num número e você tenta — eu digo se é maior, menor, e quando está quente |
+| `/quiz` | Pergunta de conhecimentos gerais; responda com `/quiz b` |
+| `/casal` | Sorteia o casal do dia no grupo, com nota de compatibilidade (o mesmo até amanhã) |
+| `/roleta` | Roleta russa de brincadeira: a chance sobe a cada clique até alguém "levar" |
+| `/eununca` | Sorteia um "eu nunca" para o grupo reagir |
+| `/detector` | Detector de mentiras — responda a uma mensagem ou escreva a afirmação |
 
 ### 👥 Grupo
 
@@ -73,7 +85,29 @@ Ajuste com `LITURGIA_HORARIO` (padrão `06:00`), `LITURGIA_LEMBRETES` (padrão `
 
 ### 🔧 Utilidades
 
-`/menu` · `/ping`
+| Comando | O que faz |
+|---|---|
+| `/calc 1500*0,13` | Calculadora: parênteses, `%`, potência `^`, `raiz()`, `pi`. Sem `eval` — parser próprio |
+| `/racha 180 4` | Divide a conta. `/racha 180 4 10%` inclui a gorjeta; `/racha 180 @a @b` divide entre os marcados |
+| `/cotacao` | Dólar, euro e bitcoin com a variação do dia. `/cotacao libra` para uma só |
+| `/clima Salvador` | Tempo agora e previsão de 3 dias |
+| `/cep 40010-000` | Endereço completo do CEP |
+| `/horario` | Hora do bot, fuso e quando cada rotina automática dispara |
+| `/menu` · `/ping` | Menu e teste de conexão |
+
+Todas as consultas usam APIs públicas gratuitas, sem cadastro nem chave.
+
+## Fuso horário
+
+O bot roda tudo pelo relógio de **America/Bahia**. Isso importa porque servidor de hospedagem quase sempre roda em UTC — sem ajustar, as leituras das 06:00 chegariam às 03:00, o resumo das 07:00 às 04:00, e depois das 21:00 o "hoje" já viraria o dia seguinte, bagunçando agenda, liturgia e a competência dos gastos.
+
+O ajuste é a variável `TZ` no `.env`:
+
+```
+TZ=America/Bahia
+```
+
+`src/tz.js` é o **primeiro import** do `index.js`, de propósito: ele precisa rodar antes de qualquer `Date` existir no processo. Confira com `/horario` depois de subir.
 
 ## Quem pode usar o quê
 

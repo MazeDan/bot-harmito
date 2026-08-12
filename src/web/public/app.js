@@ -372,6 +372,7 @@ function cardLiturgia() {
 
 const CATEGORIAS = {
   diversao: '🎲 Diversão',
+  jogos: '🕹️ Jogos',
   fe: '🙏 Fé',
   grupo: '👥 Grupo',
   midia: '🖼️ Mídia',

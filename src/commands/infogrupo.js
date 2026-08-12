@@ -2,7 +2,7 @@ import { arroba, metadados } from '../lib/grupo.js'
 import { getGrupo } from '../lib/grupos.js'
 
 const CATEGORIAS = {
-  diversao: '🎲 Diversão', midia: '🖼️ Mídia', grupo: '👥 Grupo',
+  diversao: '🎲 Diversão', jogos: '🕹️ Jogos', midia: '🖼️ Mídia', grupo: '👥 Grupo',
   utilidades: '🔧 Utilidades', financeiro: '💳 Financeiro', agenda: '📅 Agenda',
 }
 
