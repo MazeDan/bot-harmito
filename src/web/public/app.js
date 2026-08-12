@@ -232,6 +232,11 @@ const TITULOS = {
     if (n.atrasados) return `${n.pendentesHoje} hoje · ${n.atrasados} atrasado(s)`
     return n.pendentesHoje ? `${n.pendentesHoje} pendente(s) hoje` : 'tudo em dia'
   }],
+  liturgia: ['Liturgia', () => {
+    const d = LIT_CACHE.get(LIT_DATA ?? S.agenda.hoje)
+    if (d?.celebracao) return d.celebracao
+    return S.liturgia.anotacaoHoje ? 'anotado hoje ✅' : 'leituras do dia'
+  }],
   cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
   pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => !p.eu && p.saldo > 0.009).length} devendo`],
   historico: ['Histórico', () => {
@@ -258,9 +263,10 @@ function render({ manterScroll = false } = {}) {
   badge.textContent = pend > 9 ? '9+' : String(pend)
 
   // o botão flutuante muda de função conforme a aba
-  $('#fab').textContent = TAB === 'agenda' ? '📝' : '+'
+  $('#fab').textContent = TAB === 'agenda' ? '📝' : TAB === 'liturgia' ? '✍️' : '+'
+  $('#fab').style.display = TAB === 'liturgia' && !LIT_CACHE.get(LIT_DATA ?? S.agenda.hoje) ? 'none' : ''
 
-  $('#main').innerHTML = ({ resumo, agenda, cartoes, pessoas, historico, mais })[TAB]()
+  $('#main').innerHTML = ({ resumo, agenda, liturgia, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   ligarCopia()
   window.scrollTo(0, manterScroll ? y : 0)
@@ -324,6 +330,144 @@ function resumo() {
 
 // ---------- liturgia ----------
 
+/** Cores litúrgicas → cor da interface do dia */
+const COR_LITURGICA = {
+  verde: '#2fd08a', vermelho: '#ff5a6a', roxo: '#a78bfa', violeta: '#a78bfa',
+  branco: '#d8dcea', dourado: '#e8b64c', rosa: '#ff7ac6', preto: '#8a92a6',
+}
+const corDoDia = (nome) =>
+  COR_LITURGICA[String(nome || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')] ?? '#7c5cff'
+
+/** Dia sendo visto na aba, e o cache do que já foi buscado */
+let LIT_DATA = null
+const LIT_CACHE = new Map()
+const LIT_ABERTOS = new Set(['evangelho']) // o evangelho já abre expandido
+let LIT_CARREGANDO = false
+
+const dataLonga = (iso) =>
+  new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+
+async function carregarLiturgia(data) {
+  if (LIT_CACHE.has(data) || LIT_CARREGANDO) return
+  LIT_CARREGANDO = true
+  try {
+    LIT_CACHE.set(data, await api(`/liturgia/leituras?data=${encodeURIComponent(data)}`))
+  } catch (e) {
+    LIT_CACHE.set(data, { erro: e.message })
+  } finally {
+    LIT_CARREGANDO = false
+    if (TAB === 'liturgia') render({ manterScroll: true })
+  }
+}
+
+function liturgia() {
+  const hoje = S.agenda.hoje
+  LIT_DATA ??= hoje
+  const d = LIT_CACHE.get(LIT_DATA)
+
+  if (!d) {
+    carregarLiturgia(LIT_DATA)
+    return `<div class="card"><div class="empty"><span class="big">📖</span>Buscando as leituras…</div></div>`
+  }
+  if (d.erro) {
+    return `<div class="card"><div class="empty"><span class="big">😕</span>${esc(d.erro)}</div>
+      <button class="btn full" data-acao="lit-recarregar">Tentar de novo</button></div>`
+  }
+
+  const cor = corDoDia(d.cor)
+  const ehHoje = LIT_DATA === hoje
+
+  // ---- linha do tempo das leituras ----
+  const timeline = d.passos.map((p) => {
+    const aberto = LIT_ABERTOS.has(p.tipo)
+    return `<div class="tl-item ${aberto ? 'aberto' : ''}">
+      <span class="tl-dot">${p.icone}</span>
+      <button class="tl-cabeca" data-acao="lit-abrir" data-passo="${esc(p.tipo)}">
+        <span>
+          <span class="rotulo">${esc(p.rotulo)}</span>
+          ${p.referencia ? `<span class="ref">${esc(p.referencia)}</span>` : ''}
+        </span>
+        <span class="seta">▼</span>
+      </button>
+      <div class="tl-corpo">
+        ${p.subtitulo ? `<div class="subtitulo">${esc(p.subtitulo)}</div>` : ''}
+        ${p.refrao ? `<div class="refrao"><b>R.</b> ${esc(p.refrao)}</div>` : ''}
+        <div class="texto">${esc(p.texto)}</div>
+      </div>
+    </div>`
+  }).join('')
+
+  // ---- anotação do dia ----
+  const a = d.anotacao
+  const nota = a
+    ? `<div class="lit-nota">${esc(a.texto)}</div>
+       <div class="muted" style="font-size:12px;margin-top:8px">
+         Anotado às ${new Date(a.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${a.atualizadoEm ? ' · complementado depois' : ''}
+       </div>`
+    : `<div class="lit-vazio">✍️ Nada anotado ${ehHoje ? 'hoje' : 'neste dia'} ainda.<br>
+       <span style="font-size:12.5px">${ehHoje ? `O bot cobra às ${S.liturgia.lembretes.map(esc).join(', ')}.` : ''}</span></div>`
+
+  return `<div class="liturgia" style="--lit:${cor}">
+    <div class="lit-capa">
+      <div class="dia">${esc(dataLonga(LIT_DATA))}</div>
+      <div class="celebracao">${esc(d.celebracao || 'Liturgia do dia')}</div>
+      ${d.cor ? `<span class="cor"><i></i> Cor litúrgica: ${esc(d.cor)}</span>` : ''}
+    </div>
+
+    <div class="lit-dias">
+      <button class="btn ghost sm" data-acao="lit-dia" data-passo="-1">‹ Ontem</button>
+      <span class="atual">${ehHoje ? '📍 Hoje' : esc(rotuloDia(LIT_DATA))}</span>
+      <button class="btn ghost sm" data-acao="lit-dia" data-passo="1">Amanhã ›</button>
+    </div>
+    ${!ehHoje ? '<button class="btn ghost full" data-acao="lit-hoje" style="margin-bottom:14px">Voltar para hoje</button>' : ''}
+
+    <div class="card">
+      <h3>📖 Leituras <small>toque para abrir</small>
+        <button class="btn ghost sm push" data-acao="lit-tudo">${d.passos.every((p) => LIT_ABERTOS.has(p.tipo)) ? 'Fechar tudo' : 'Abrir tudo'}</button>
+      </h3>
+      <div class="timeline">${timeline}</div>
+    </div>
+
+    <div class="card">
+      <h3>🙏 Minha anotação
+        ${S.liturgia.sequencia > 1 ? `<span class="push lit-streak">🔥 ${S.liturgia.sequencia} dias</span>` : '<span class="push"></span>'}
+      </h3>
+      ${nota}
+      <div class="field" style="margin-top:14px">
+        <textarea id="litTexto" rows="3" style="min-height:86px" placeholder="O que você entendeu da leitura…"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn" data-acao="lit-anotar" data-passo="${esc(LIT_DATA)}">${a ? '＋ Somar' : '✍️ Anotar'}</button>
+        ${a ? `<button class="btn ghost" data-acao="lit-trocar" data-passo="${esc(LIT_DATA)}">Substituir</button>` : ''}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📤 Enviar e copiar</h3>
+      <div class="btn-row">
+        <button class="btn ghost" data-copiar="#litTextoCompleto" data-rotulo="Leituras copiadas!">📋 Copiar</button>
+        <button class="btn ghost" data-acao="liturgia-ler-enviar">📤 Nos grupos</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">
+        Todo dia às ${esc(S.liturgia.horario)} em ${S.liturgia.grupos.length} grupo(s).
+        <button class="btn ghost sm" data-acao="liturgia-grupos" style="margin-left:6px">Escolher</button>
+      </div>
+      <div id="litTextoCompleto" style="display:none">${esc(d.partes.join('\n\n━━━━━━━━━━\n\n'))}</div>
+    </div>
+
+    ${S.liturgia.anotacoes.length > 1 ? `<div class="card">
+      <h3>Anotações anteriores <small>${S.liturgia.anotacoes.length}</small></h3>
+      <div class="rows">${S.liturgia.anotacoes.filter((x) => x.data !== LIT_DATA).slice(0, 10).map((x) => `
+        <button class="row-item" data-acao="lit-ir" data-passo="${esc(x.data)}">
+          <span class="avatar">🙏</span>
+          <span class="grow"><span class="t1">${esc(rotuloDia(x.data))}</span>
+          <span class="t2">${esc(x.texto.replace(/\n+/g, ' ').slice(0, 60))}</span></span>
+          <span class="chev">›</span>
+        </button>`).join('')}</div>
+    </div>` : ''}
+  </div>`
+}
+
 function cardLiturgia() {
   const L = S.liturgia
   const nomeGrupo = (jid) => S.grupos.lista.find((g) => g.jid === jid)?.nome ?? jid
@@ -345,26 +489,16 @@ function cardLiturgia() {
       </div>
       ${L.sequencia > 1 ? `<div class="row-item" style="cursor:default">
         <span class="grow t1" style="font-weight:500">Sequência</span><b style="color:var(--ok)">🔥 ${L.sequencia} dias</b></div>` : ''}
+      <div class="row-item" style="cursor:default">
+        <span class="grow t1" style="font-weight:500">Anotação de hoje</span>
+        ${a ? '<span class="tag ok">feita</span>' : '<span class="tag warn">pendente</span>'}
+      </div>
     </div>
 
     <div class="btn-row" style="margin-top:14px">
-      <button class="btn ghost" data-acao="liturgia-grupos">📖 Escolher grupos</button>
-      <button class="btn ghost" data-acao="liturgia-ler">👁️ Ler hoje</button>
+      <button class="btn" data-acao="ir-liturgia">🙏 Abrir a aba</button>
+      <button class="btn ghost" data-acao="liturgia-grupos">Grupos</button>
     </div>
-
-    <h3 style="margin:18px 0 10px">Minha anotação de hoje</h3>
-    ${a
-      ? `<div class="banner ok" style="white-space:pre-wrap">${esc(a.texto)}</div>`
-      : '<div class="banner warn">Ainda sem anotação. O bot cobra às ' + L.lembretes.map(esc).join(', ') + '.</div>'}
-    <div class="field"><textarea id="litTexto" rows="3" style="min-height:80px" placeholder="O que você entendeu da leitura de hoje…"></textarea></div>
-    <button class="btn full" data-acao="liturgia-anotar">${a ? 'Somar à anotação' : 'Anotar'}</button>
-
-    ${L.anotacoes.length ? `<h3 style="margin:18px 0 10px">Anteriores <small>${L.anotacoes.length}</small></h3>
-      <div class="rows">${L.anotacoes.slice(1, 9).map((x) => `<button class="row-item" data-acao="liturgia-ver" data-data="${esc(x.data)}">
-        <span class="avatar">🙏</span>
-        <span class="grow"><span class="t1">${esc(x.data.split('-').reverse().join('/'))}</span>
-        <span class="t2">${esc(x.texto.replace(/\\n+/g, ' ').slice(0, 60))}</span></span>
-        <span class="chev">›</span></button>`).join('')}</div>` : ''}
   </div>`
 }
 
@@ -1065,11 +1199,64 @@ const acoes = {
     resultadoCobranca(r.resultados, false); render()
   },
 
-  // --- liturgia ---
+  // --- liturgia: aba ---
+  'ir-liturgia': () => { TAB = 'liturgia'; render() },
+
+  'lit-abrir': ({ passo }) => {
+    if (LIT_ABERTOS.has(passo)) LIT_ABERTOS.delete(passo)
+    else LIT_ABERTOS.add(passo)
+    render({ manterScroll: true })
+  },
+
+  'lit-tudo': () => {
+    const d = LIT_CACHE.get(LIT_DATA)
+    const todosAbertos = d.passos.every((p) => LIT_ABERTOS.has(p.tipo))
+    LIT_ABERTOS.clear()
+    if (!todosAbertos) d.passos.forEach((p) => LIT_ABERTOS.add(p.tipo))
+    render({ manterScroll: true })
+  },
+
+  'lit-dia': ({ passo }) => {
+    const d = new Date(LIT_DATA + 'T12:00:00')
+    d.setDate(d.getDate() + Number(passo))
+    LIT_DATA = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    render()
+  },
+
+  'lit-hoje': () => { LIT_DATA = S.agenda.hoje; render() },
+  'lit-ir': ({ passo }) => { LIT_DATA = passo; TAB = 'liturgia'; render() },
+  'lit-recarregar': () => { LIT_CACHE.delete(LIT_DATA); render() },
+
+  'lit-anotar': async ({ passo }) => {
+    const texto = $('#litTexto').value.trim()
+    if (!texto) return toast('Escreva alguma coisa.', 'err')
+    await api('/liturgia/anotacao', { body: { texto, data: passo } })
+    LIT_CACHE.delete(passo)
+    toast('🙏 Anotado.'); render({ manterScroll: true })
+  },
+
+  'lit-trocar': async ({ passo }) => {
+    const texto = $('#litTexto').value.trim()
+    if (!texto) return toast('Escreva o novo texto.', 'err')
+    if (!await confirmar('Substituir a anotação deste dia pelo novo texto?', 'Substituir')) return
+    await api('/liturgia/anotacao', { body: { texto, data: passo, substituir: true } })
+    LIT_CACHE.delete(passo)
+    toast('🙏 Substituída.'); render({ manterScroll: true })
+  },
+
+  'liturgia-ler-enviar': async () => {
+    if (!S.liturgia.grupos.length) return toast('Escolha os grupos primeiro.', 'err')
+    if (!await confirmar(`Enviar as leituras agora em ${S.liturgia.grupos.length} grupo(s)?`, 'Enviar')) return
+    const res = await api('/liturgia/enviar', { body: {} })
+    toast(`📖 ${res.resultados.filter((x) => x.status === 'enviado').length} enviado(s).`)
+  },
+
+  // --- liturgia: card antigo, na aba Mais ---
   'liturgia-anotar': async () => {
     const texto = $('#litTexto').value.trim()
     if (!texto) return toast('Escreva alguma coisa.', 'err')
     await api('/liturgia/anotacao', { body: { texto } })
+    LIT_CACHE.delete(S.agenda.hoje)
     toast('🙏 Anotado.'); render({ manterScroll: true })
   },
 
@@ -1969,7 +2156,17 @@ function telaLogin(erro = '') {
 // ---------- boot ----------
 
 $$('#tabbar button').forEach((b) => { b.onclick = () => { vibrar(); TAB = b.dataset.tab; render() } })
-$('#fab').onclick = () => { vibrar(); TAB === 'agenda' ? formLembrete() : formGasto() }
+$('#fab').onclick = () => {
+  vibrar()
+  if (TAB === 'agenda') return formLembrete()
+  if (TAB === 'liturgia') {
+    const campo = $('#litTexto')
+    campo?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setTimeout(() => campo?.focus(), 350)
+    return
+  }
+  formGasto()
+}
 
 window.addEventListener('unhandledrejection', (e) => toast(e.reason?.message || 'Erro inesperado', 'err'))
 

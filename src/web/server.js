@@ -289,9 +289,14 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true, state: montarEstado() })
   }
   if (p === '/liturgia/leituras' && m === 'GET') {
-    const l = await lit.buscarLeituras(url.searchParams.get('data') || undefined)
-    if (!l) return json(res, 502, { erro: 'Não consegui buscar a liturgia agora.' })
-    return json(res, 200, { liturgia: l.liturgia, cor: l.cor, partes: lit.montarPartes(l, url.searchParams.get('data') || undefined) })
+    const data = url.searchParams.get('data') || ag.hojeISO()
+    const l = await lit.buscarLeituras(data)
+    if (!l) return json(res, 502, { erro: 'Não consegui buscar a liturgia agora. A fonte pode estar fora do ar.' })
+    return json(res, 200, {
+      ...lit.montarEstruturado(l, data),
+      partes: lit.montarPartes(l, data), // texto pronto, para o botão de copiar
+      anotacao: lit.anotacaoDe(data),
+    })
   }
   if (p === '/liturgia/enviar' && m === 'POST') {
     const r = await lit.rodarEnvioDiario({ forcar: true })

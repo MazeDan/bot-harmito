@@ -73,16 +73,17 @@ main {
   backdrop-filter: saturate(160%) blur(14px);
   border-top: 1px solid var(--line);
   padding: 6px 2px calc(var(--safe-b) + 6px);
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(7, 1fr);
 }
 .tabbar button {
   background: none; border: none; color: var(--txt-3); cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 1px; font: inherit; font-size: 9.5px; font-weight: 600;
+  padding: 6px 0; font: inherit; font-size: 8.8px; font-weight: 600;
   border-radius: 12px; min-height: 48px; transition: color .15s;
   position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: -.2px;
 }
-.tabbar button .ic { font-size: 18px; line-height: 1; }
+.tabbar button .ic { font-size: 17px; line-height: 1; }
 .tabbar button.on { color: var(--accent-2); }
 
 /* bolinha de pendências na aba Agenda */
@@ -271,6 +272,101 @@ svg text { fill: var(--txt-3); font-family: inherit; }
 .muted { color: var(--txt-3); }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
+
+/* ================= liturgia ================= */
+
+/* A cor litúrgica do dia vira o acento da tela inteira */
+.liturgia { --lit: var(--accent); }
+
+.lit-capa {
+  background: linear-gradient(150deg, color-mix(in srgb, var(--lit) 22%, var(--card)), var(--card) 65%);
+  border: 1px solid color-mix(in srgb, var(--lit) 35%, var(--line));
+  border-radius: var(--radius); padding: 18px; position: relative; overflow: hidden;
+}
+.lit-capa::after {
+  content: ''; position: absolute; right: -30px; top: -30px;
+  width: 130px; height: 130px; border-radius: 50%;
+  background: var(--lit); opacity: .12;
+}
+.lit-capa .dia { font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--txt-3); font-weight: 700; }
+.lit-capa .celebracao { font-size: 19px; font-weight: 680; letter-spacing: -.4px; margin-top: 5px; line-height: 1.3; }
+.lit-capa .cor {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 11px;
+  font-size: 12px; font-weight: 600; color: var(--txt-2);
+  background: var(--bg); border: 1px solid var(--line);
+  padding: 5px 11px; border-radius: 999px;
+}
+.lit-capa .cor i { width: 11px; height: 11px; border-radius: 50%; background: var(--lit); display: block; }
+
+/* navegação entre os dias */
+.lit-dias { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
+.lit-dias .btn { flex: 0 0 auto; }
+.lit-dias .atual { flex: 1; text-align: center; font-size: 13px; font-weight: 650; }
+
+/* ---- linha do tempo das leituras ---- */
+.timeline { position: relative; padding-left: 34px; margin-top: 6px; }
+.timeline::before {
+  content: ''; position: absolute; left: 14px; top: 14px; bottom: 14px;
+  width: 2px; background: linear-gradient(var(--lit), color-mix(in srgb, var(--lit) 20%, transparent));
+  opacity: .5;
+}
+
+.tl-item { position: relative; margin-bottom: 12px; }
+.tl-item:last-child { margin-bottom: 0; }
+
+.tl-dot {
+  position: absolute; left: -34px; top: 12px;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 14px;
+  background: var(--card); border: 2px solid color-mix(in srgb, var(--lit) 55%, var(--line));
+  z-index: 1;
+}
+
+.tl-cabeca {
+  width: 100%; text-align: left; background: var(--card); color: inherit; font: inherit;
+  border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; transition: border-color .15s;
+}
+.tl-cabeca:active { background: var(--card-2); }
+.tl-item.aberto .tl-cabeca { border-color: color-mix(in srgb, var(--lit) 45%, var(--line)); border-radius: 14px 14px 0 0; border-bottom-color: transparent; }
+.tl-cabeca .rotulo { font-weight: 650; font-size: 14.5px; display: block; }
+.tl-cabeca .ref { font-size: 12.5px; color: var(--lit); font-weight: 600; display: block; margin-top: 2px; }
+.tl-cabeca .seta { margin-left: auto; color: var(--txt-3); font-size: 13px; transition: transform .2s; }
+.tl-item.aberto .tl-cabeca .seta { transform: rotate(180deg); }
+
+.tl-corpo {
+  display: none;
+  border: 1px solid color-mix(in srgb, var(--lit) 45%, var(--line));
+  border-top: none; border-radius: 0 0 14px 14px;
+  padding: 4px 15px 15px;
+  background: var(--card);
+}
+.tl-item.aberto .tl-corpo { display: block; }
+.tl-corpo .subtitulo { font-size: 12.5px; color: var(--txt-3); font-style: italic; margin-bottom: 10px; }
+.tl-corpo .texto { font-size: 15px; line-height: 1.72; white-space: pre-wrap; }
+.tl-corpo .refrao {
+  background: color-mix(in srgb, var(--lit) 12%, transparent);
+  border-left: 3px solid var(--lit); border-radius: 0 10px 10px 0;
+  padding: 11px 13px; margin-bottom: 12px; font-size: 14.5px; font-weight: 550; line-height: 1.6;
+}
+.tl-corpo .refrao b { color: var(--lit); }
+
+/* anotação do dia */
+.lit-nota {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 3px solid var(--ok); border-radius: 14px;
+  padding: 14px 16px; font-size: 15px; line-height: 1.7; white-space: pre-wrap;
+}
+.lit-vazio {
+  border: 1px dashed var(--line); border-radius: 14px; padding: 18px;
+  text-align: center; color: var(--txt-3); font-size: 13.5px;
+}
+
+.lit-streak {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255, 176, 32, .12); border: 1px solid rgba(255, 176, 32, .3);
+  color: var(--warn); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 650;
+}
 
 /* ================= bottom sheet ================= */
 

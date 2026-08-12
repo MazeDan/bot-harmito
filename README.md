@@ -243,6 +243,18 @@ Ajuste com `AGENDA_HORARIO` (padrão `07:00`) e `AGENDA_ATIVA=0`.
 
 No painel, a aba **Agenda** mostra tudo agrupado por dia com um círculo para concluir, e o botão flutuante vira 📝 com a mesma escrita livre do WhatsApp — com prévia ao vivo de como o bot entendeu. O Resumo ganha um bloco "Hoje" no topo, e a aba mostra uma bolinha com o número de pendências.
 
+### A aba Liturgia
+
+Tem aba própria no painel, montada como uma **linha do tempo** das leituras:
+
+- **Capa do dia** com a celebração e a cor litúrgica — e a cor do dia vira o acento da tela inteira (verde no Tempo Comum, vermelho nos mártires, branco nas festas…)
+- **Timeline** com 1ª leitura, salmo, 2ª leitura e evangelho como etapas conectadas. Cada uma abre e fecha com um toque; o evangelho já vem aberto. O salmo destaca o refrão
+- **Navegação por dia** — ontem, amanhã, ou pulando direto para uma anotação antiga
+- **Sua anotação** logo abaixo, com botão de somar ou substituir, e a sequência de dias seguidos
+- **Copiar** tudo formatado, ou disparar nos grupos na hora
+
+As leituras são buscadas só quando você abre a aba, e ficam em cache — trocar de dia e voltar não consulta de novo.
+
 ## Deploy na Square Cloud
 
 O [squarecloud.app](squarecloud.app) já está configurado (`SUBDOMAIN=harmito`, `MAIN=src/index.js`). A Square Cloud só alcança o processo em **`0.0.0.0:80`** — por isso o `.env` precisa ir junto no zip:

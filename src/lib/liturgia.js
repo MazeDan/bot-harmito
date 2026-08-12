@@ -143,6 +143,42 @@ export function montarPartes(l, dataISO = hojeISO()) {
 /** Tudo numa mensagem só (usado quando config.liturgia.mensagemUnica = true) */
 export const montarMensagemUnica = (l, dataISO) => montarPartes(l, dataISO).join('\n\n━━━━━━━━━━\n\n')
 
+/**
+ * As leituras em dados separados, para o painel montar a linha do tempo.
+ * Diferente de montarPartes(), que devolve texto já formatado pro WhatsApp.
+ */
+export function montarEstruturado(l, dataISO = hojeISO()) {
+  if (!l?.leituras) return null
+
+  const passos = []
+  const juntar = (tipo, icone, rotulo, item) => {
+    if (!item?.texto) return
+    passos.push({
+      tipo,
+      icone,
+      rotulo,
+      referencia: item.referencia ?? '',
+      subtitulo: item.titulo ?? '',
+      refrao: item.refrao ?? '',
+      texto: String(item.texto).trim(),
+    })
+  }
+
+  juntar('primeira', '📕', '1ª Leitura', primeiro(l.leituras.primeiraLeitura))
+  juntar('salmo', '🎵', 'Salmo Responsorial', primeiro(l.leituras.salmo))
+  juntar('segunda', '📗', '2ª Leitura', primeiro(l.leituras.segundaLeitura))
+  juntar('evangelho', '✝️', 'Evangelho', primeiro(l.leituras.evangelho))
+
+  return {
+    data: dataISO,
+    celebracao: l.liturgia ?? '',
+    cor: l.cor ?? '',
+    oracoes: l.oracoes ?? null,
+    antifonas: l.antifonas ?? null,
+    passos,
+  }
+}
+
 /** Versão curta: só as referências, para o lembrete do /ld */
 export function montarReferencias(l) {
   if (!l?.leituras) return ''
