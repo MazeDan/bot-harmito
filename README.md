@@ -302,7 +302,7 @@ No privado, sem precisar de `/producao`, o bot entende:
 
 Cada horário é configurável (aba **Mais** → **Produção**, ou `src/config.js` → `producao.padroes`); qualquer lembrete pode ser desligado individualmente.
 
-No painel, a aba **Produção** tem três visões: **Semana** (calendário com os dias e o que cai em cada um, com "fechar planejamento"), **Clientes** (lista, detalhe com upload e o que está pendente daquele cliente) e **Pendências** (sem data + tarefas em aberto, juntos).
+No painel, a aba **Produção** já abre em **Novo**: arraste ou toque pra escolher a arte/vídeo, escolha o cliente, o tipo (post, story, reels, vídeo…), quando vai postar e a legenda — salvou, o bot já lembra na hora certa. As outras três visões ficam ao lado: **Semana** (calendário com os dias e o que cai em cada um, com "fechar planejamento"), **Clientes** (lista, detalhe com upload em lote e o que está pendente daquele cliente) e **Tarefas** (só as tarefas — atrasadas e pendentes).
 
 Ajuste com `PRODUCAO_ATIVA=0` para desligar o módulo inteiro.
 

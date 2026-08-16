@@ -281,6 +281,7 @@ function render({ manterScroll = false } = {}) {
   $('#main').innerHTML = ({ resumo, agenda, liturgia, producao, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   ligarCopia()
+  if (TAB === 'producao' && PROD_SUBTAB === 'novo') ligarProdNovo()
   window.scrollTo(0, manterScroll ? y : 0)
 }
 
@@ -516,7 +517,7 @@ function cardLiturgia() {
 
 // ---------- produção de conteúdo ----------
 
-let PROD_SUBTAB = 'semana'
+let PROD_SUBTAB = 'novo'
 let PROD_SEMANA_DATA = null // null = semana atual
 
 const NOME_TIPO_CONTEUDO = { post: 'Post', story: 'Story', reels: 'Reels', video: 'Vídeo', carrossel: 'Carrossel', arte: 'Arte', outro: 'Outro' }
@@ -570,14 +571,94 @@ function linhaTarefa(t, { atrasada = false } = {}) {
 function producao() {
   const chips = `<div class="filtros" style="position:static;margin:0 0 14px;padding:0">
     <div class="chips">
+      <button class="chip ${PROD_SUBTAB === 'novo' ? 'on' : ''}" data-acao="prod-subtab" data-sub="novo">🆕 Novo</button>
       <button class="chip ${PROD_SUBTAB === 'semana' ? 'on' : ''}" data-acao="prod-subtab" data-sub="semana">📅 Semana</button>
       <button class="chip ${PROD_SUBTAB === 'clientes' ? 'on' : ''}" data-acao="prod-subtab" data-sub="clientes">👤 Clientes</button>
-      <button class="chip ${PROD_SUBTAB === 'pendencias' ? 'on' : ''}" data-acao="prod-subtab" data-sub="pendencias">📋 Pendências</button>
+      <button class="chip ${PROD_SUBTAB === 'tarefas' ? 'on' : ''}" data-acao="prod-subtab" data-sub="tarefas">✅ Tarefas</button>
     </div>
   </div>`
 
-  const corpo = PROD_SUBTAB === 'clientes' ? prodClientes() : PROD_SUBTAB === 'pendencias' ? prodPendencias() : prodSemana()
+  const corpo = PROD_SUBTAB === 'clientes' ? prodClientes()
+    : PROD_SUBTAB === 'tarefas' ? prodTarefas()
+    : PROD_SUBTAB === 'semana' ? prodSemana()
+    : prodNovo()
   return chips + corpo
+}
+
+function prodNovo() {
+  const clientes = S.producao.clientes
+  if (!clientes.length) {
+    return `<div class="card"><div class="empty"><span class="big">👤</span>Cadastre um cliente antes de criar um conteúdo.</div>
+      <button class="btn full" data-acao="prod-novo-cliente">+ Novo cliente</button></div>`
+  }
+  return `<div class="card" style="margin-bottom:14px">
+      <div class="prod-drop" id="pnDrop">
+        <div style="font-size:26px">📤</div>
+        <div style="font-weight:600;margin-top:6px" id="pnDropTexto">Arraste ou toque para escolher a arte ou vídeo</div>
+        <div class="muted" style="font-size:12px;margin-top:3px">JPG, PNG, WEBP, GIF, MP4, MOV, PDF</div>
+        <input type="file" id="pnArquivo" accept="${S.producao.extensoesAceitas?.join(',') ?? ''}">
+      </div>
+    </div>
+    <div class="field"><label>Cliente</label>
+      <div class="chips scroll" id="pnCliente">${clientes.map((c) => `<button class="chip" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}</div></div>
+    <div class="field"><label>Tipo</label>
+      <div class="chips scroll" id="pnTipo">${Object.entries(NOME_TIPO_CONTEUDO).map(([v, n]) => `<button class="chip dim ${v === 'post' ? 'on' : ''}" data-v="${v}">${ICONE_TIPO_CONTEUDO[v]} ${n}</button>`).join('')}</div></div>
+    <div class="field-row">
+      <div class="field"><label>Quando vou postar</label><input id="pnData" type="date" value="${esc(hojeISOProd())}"></div>
+      <div class="field" style="flex:0 0 120px"><label>Hora</label><input id="pnHora" type="time"></div>
+    </div>
+    <div class="field"><label>Legenda</label><textarea id="pnLegenda" rows="3" placeholder="Escreva a legenda…"></textarea></div>
+    <button class="btn full" id="pnSalvar" style="margin-top:4px">📤 Agendar publicação</button>`
+}
+
+function ligarProdNovo() {
+  const bg = $('#main')
+  const drop = $('#pnDrop', bg)
+  if (!drop) return
+  const input = $('#pnArquivo', bg)
+  const texto = $('#pnDropTexto', bg)
+  let arquivo = null
+  const marcarArquivo = (f) => { arquivo = f; texto.textContent = f ? `✅ ${f.name}` : 'Arraste ou toque para escolher a arte ou vídeo' }
+
+  drop.onclick = () => input.click()
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('ativo') }
+  drop.ondragleave = () => drop.classList.remove('ativo')
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('ativo'); if (e.dataTransfer.files[0]) marcarArquivo(e.dataTransfer.files[0]) }
+  input.onchange = () => { if (input.files[0]) marcarArquivo(input.files[0]) }
+
+  const pegaCliente = grupoChipsProd(bg, '#pnCliente', null)
+  const pegaTipo = grupoChipsProd(bg, '#pnTipo', 'post')
+
+  const btn = $('#pnSalvar', bg)
+  btn.onclick = async () => {
+    const clienteKey = pegaCliente()
+    if (!clienteKey) return toast('Escolha o cliente.', 'err')
+    if (!arquivo) return toast('Escolha a arte ou vídeo.', 'err')
+    const data = $('#pnData', bg).value || null
+    const hora = $('#pnHora', bg).value || null
+    const legenda = $('#pnLegenda', bg).value.trim()
+    const tipo = pegaTipo()
+
+    btn.disabled = true; btn.textContent = 'Enviando…'
+    try {
+      const fd = new FormData()
+      fd.append('cliente', clienteKey)
+      fd.append('arquivos', arquivo)
+      const res = await fetch('/api/producao/upload', { method: 'POST', headers: { 'x-token': TOKEN }, body: fd })
+      const up = await res.json()
+      if (!res.ok) throw new Error(up.erro || 'Falha no envio.')
+      const num = up.numeros?.[0]
+      if (!num) throw new Error(up.erros?.[0] || 'Falha ao criar o conteúdo.')
+      await api(`/producao/conteudos/${num}`, { method: 'PATCH', body: { tipo, legenda } })
+      await api(`/producao/conteudos/${num}/agendar`, { method: 'PATCH', body: { data, hora } })
+      S = await api('/state')
+      toast('📅 Publicação agendada — te aviso na hora de postar.')
+      render()
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '📤 Agendar publicação'
+      toast(e.message, 'err')
+    }
+  }
 }
 
 function prodSemana() {
@@ -640,22 +721,18 @@ function prodClientes() {
     <button class="btn ghost full" style="margin-top:14px" data-acao="prod-novo-cliente">+ Novo cliente</button>`
 }
 
-function prodPendencias() {
+function prodTarefas() {
   const atrasadas = S.producao.tarefasAtrasadas
-  const naoPlanejados = S.producao.naoPlanejados
   const pendentes = S.producao.tarefasPendentes.filter((t) => !atrasadas.some((a) => a.num === t.num))
 
-  if (!atrasadas.length && !naoPlanejados.length && !pendentes.length) {
-    return '<div class="card"><div class="empty"><span class="big">🎉</span>Tudo em dia na produção!</div></div>'
+  if (!atrasadas.length && !pendentes.length) {
+    return '<div class="card"><div class="empty"><span class="big">🎉</span>Nenhuma tarefa em aberto!</div></div>'
   }
 
   let t = ''
   if (atrasadas.length) t += `<div class="card" style="border-color:rgba(255,90,106,.4);margin-bottom:14px">
     <h3>🔴 Atrasadas <span class="push muted">${atrasadas.length}</span></h3>
     <div class="rows">${atrasadas.map((tk) => linhaTarefa(tk, { atrasada: true })).join('')}</div></div>`
-  if (naoPlanejados.length) t += `<div class="card" style="margin-bottom:14px">
-    <h3>🟡 Sem data <span class="push muted">${naoPlanejados.length}</span></h3>
-    <div class="rows">${naoPlanejados.map(linhaConteudo).join('')}</div></div>`
   if (pendentes.length) t += `<div class="card">
     <h3>⏳ Tarefas pendentes <span class="push muted">${pendentes.length}</span></h3>
     <div class="rows">${pendentes.map((tk) => linhaTarefa(tk)).join('')}</div></div>`
@@ -904,7 +981,7 @@ function formConteudo(conteudo) {
   const { bg, fechar } = sheet({
     titulo: `#${conteudo.num} · ${nomeCli(conteudo.clienteKey)}`,
     corpo,
-    aoAbrir: () => {
+    aoAbrir: ({ bg }) => {
       if (conteudo.arquivos?.length) {
         const a = conteudo.arquivos[0]
         const preview = /\.(jpe?g|png|webp|gif)$/i.test(a.nome)
@@ -2700,11 +2777,13 @@ if (!TOKEN) telaLogin()
 else api('/state').then((s) => { S = s; render() }).catch(() => {})
 
 // atualiza sozinho quando volta pro app, e a cada 60s
+const formProdNovoAberto = () => TAB === 'producao' && PROD_SUBTAB === 'novo'
+
 document.addEventListener('visibilitychange', async () => {
-  if (document.hidden || !TOKEN || $('.sheet-bg')) return
+  if (document.hidden || !TOKEN || $('.sheet-bg') || formProdNovoAberto()) return
   try { S = await api('/state'); render() } catch {}
 })
 setInterval(async () => {
-  if ($('.sheet-bg') || !TOKEN || document.hidden) return
+  if ($('.sheet-bg') || !TOKEN || document.hidden || formProdNovoAberto()) return
   try { S = await api('/state'); render() } catch {}
 }, 60_000)

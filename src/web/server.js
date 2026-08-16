@@ -278,7 +278,7 @@ async function api(req, res, url) {
         erros.push(`${parte.filename}: ${err.message}`)
       }
     }
-    return json(res, 200, { ok: true, criados: criados.length, erros, state: montarEstado() })
+    return json(res, 200, { ok: true, criados: criados.length, numeros: criados, erros, state: montarEstado() })
   }
 
   // --- servir o arquivo enviado (protegido pelo mesmo token do painel) ---
