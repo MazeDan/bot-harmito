@@ -16,6 +16,7 @@ import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
 import { donoTokenAutomatico } from '../lib/donoAuth.js'
+import * as pr from '../lib/producao.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC = path.join(__dirname, 'public')
@@ -90,6 +91,56 @@ function readBody(req) {
   })
 }
 
+/** Corpo cru em Buffer, com limite — usado pro upload (não dá pra virar string, corromperia binário) */
+function readBodyBuffer(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const pedacos = []
+    let total = 0
+    req.on('data', (c) => {
+      total += c.length
+      if (total > maxBytes) { reject(new Error('Arquivo(s) grande(s) demais para esse lote.')); req.destroy(); return }
+      pedacos.push(c)
+    })
+    req.on('end', () => resolve(Buffer.concat(pedacos)))
+    req.on('error', reject)
+  })
+}
+
+/**
+ * Parser mínimo de multipart/form-data — sem dependência externa. Devolve
+ * uma lista de partes: campos de texto ({name, valor}) e arquivos
+ * ({name, filename, mime, data: Buffer}).
+ */
+function parseMultipart(buffer, boundary) {
+  const partes = []
+  const marcador = Buffer.from(`--${boundary}`)
+  let pos = buffer.indexOf(marcador)
+  if (pos === -1) return partes
+  pos += marcador.length
+
+  while (true) {
+    const fim = buffer.indexOf(marcador, pos)
+    if (fim === -1) break
+    let trecho = buffer.subarray(pos, fim)
+    if (trecho.subarray(0, 2).toString('latin1') === '\r\n') trecho = trecho.subarray(2)
+    if (trecho.subarray(-2).toString('latin1') === '\r\n') trecho = trecho.subarray(0, -2)
+
+    const fimCabecalho = trecho.indexOf('\r\n\r\n')
+    if (fimCabecalho !== -1) {
+      const cabecalho = trecho.subarray(0, fimCabecalho).toString('utf-8')
+      const dados = trecho.subarray(fimCabecalho + 4)
+      const nome = cabecalho.match(/name="([^"]*)"/)?.[1]
+      const arquivo = cabecalho.match(/filename="([^"]*)"/)?.[1]
+      const mime = cabecalho.match(/Content-Type:\s*([^\r\n]+)/i)?.[1]
+      if (nome) partes.push({ name: nome, filename: arquivo || null, mime: mime || 'application/octet-stream', data: dados })
+    }
+
+    pos = fim + marcador.length
+    if (buffer.subarray(pos, pos + 2).toString('latin1') === '--') break
+  }
+  return partes
+}
+
 // ---------- estado completo para o painel ----------
 
 function montarEstado() {
@@ -150,6 +201,18 @@ function montarEstado() {
       ultimo: fin.getSettings().ultimoBackup || null,
       temDestino: Boolean(fin.getSettings().donoJid),
     },
+    producao: {
+      ativo: config.producao.ativo,
+      dashboard: pr.dashboard(),
+      clientes: pr.listClientes(),
+      semanaAtual: pr.semana(),
+      naoPlanejados: pr.conteudosNaoPlanejados(),
+      tarefasAtrasadas: pr.tarefasAtrasadas(),
+      tarefasPendentes: pr.tarefasPendentes(),
+      recorrencias: pr.listRecorrencias(),
+      lembretes: pr.getLembretesConfig(),
+      extensoesAceitas: config.producao.extensoes,
+    },
     settings: fin.getSettings(),
     cards,
     pessoas,
@@ -178,8 +241,59 @@ const round2 = (v) => Math.round(v * 100) / 100
 
 async function api(req, res, url) {
   const p = url.pathname.replace(/^\/api/, '')
-  const body = req.method === 'GET' ? {} : await readBody(req)
   const m = req.method
+
+  // --- upload de arquivo (multipart, não é JSON — trata antes do resto) ---
+  if (p === '/producao/upload' && m === 'POST') {
+    const contentType = req.headers['content-type'] || ''
+    const boundary = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/)?.[1] ||
+      contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/)?.[2]
+    if (!boundary) return json(res, 400, { erro: 'Envie como multipart/form-data.' })
+
+    let buffer
+    try { buffer = await readBodyBuffer(req, config.producao.maxLoteBytes) }
+    catch (err) { return json(res, 413, { erro: err.message }) }
+
+    const partes = parseMultipart(buffer, boundary)
+    const clienteKey = partes.find((x) => x.name === 'cliente')?.data.toString('utf-8')
+    const cliente = pr.getCliente(clienteKey)
+    if (!cliente) return json(res, 400, { erro: 'Cliente não encontrado.' })
+
+    const arquivos = partes.filter((x) => x.filename)
+    if (!arquivos.length) return json(res, 400, { erro: 'Nenhum arquivo no upload.' })
+
+    const criados = []
+    const erros = []
+    for (const parte of arquivos) {
+      if (parte.data.length > config.producao.maxArquivoBytes) {
+        erros.push(`${parte.filename}: maior que ${Math.round(config.producao.maxArquivoBytes / 1024 / 1024)} MB`)
+        continue
+      }
+      try {
+        const conteudo = await pr.addConteudo({ clienteKey: cliente.key, titulo: parte.filename.replace(/\.[^.]+$/, '') })
+        const arquivo = pr.guardarArquivo(cliente.key, conteudo.num, parte.data, parte.filename, parte.mime)
+        await pr.anexarArquivo(conteudo.num, arquivo)
+        criados.push(conteudo.num)
+      } catch (err) {
+        erros.push(`${parte.filename}: ${err.message}`)
+      }
+    }
+    return json(res, 200, { ok: true, criados: criados.length, erros, state: montarEstado() })
+  }
+
+  // --- servir o arquivo enviado (protegido pelo mesmo token do painel) ---
+  if (p.startsWith('/producao/arquivo/') && m === 'GET') {
+    const num = Number(decodeURIComponent(p.slice('/producao/arquivo/'.length)))
+    const conteudo = pr.getConteudo(num)
+    const arq = conteudo?.arquivos?.[0]
+    if (!arq) return json(res, 404, { erro: 'Arquivo não encontrado.' })
+    const caminho = pr.caminhoAbsoluto(arq.arquivo)
+    if (!existsSync(caminho)) return json(res, 404, { erro: 'Arquivo não encontrado no disco.' })
+    res.writeHead(200, { 'content-type': arq.mime || 'application/octet-stream', 'cache-control': 'private, max-age=86400' })
+    return createReadStream(caminho).pipe(res)
+  }
+
+  const body = req.method === 'GET' ? {} : await readBody(req)
 
   if (p === '/state' && m === 'GET') return json(res, 200, montarEstado())
 
@@ -370,6 +484,96 @@ async function api(req, res, url) {
   if (p.startsWith('/agenda/') && m === 'DELETE') {
     await ag.remover(Number(decodeURIComponent(p.slice(8))))
     return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- produção: clientes ---
+  if (p === '/producao/clientes' && m === 'POST') {
+    if (!body.name) return json(res, 400, { erro: 'Nome é obrigatório.' })
+    const c = await pr.upsertCliente(body.name, body)
+    return json(res, 200, { ok: true, cliente: c, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/clientes/') && m === 'DELETE') {
+    await pr.deleteCliente(decodeURIComponent(p.slice('/producao/clientes/'.length)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- produção: conteúdos ---
+  if (p === '/producao/conteudos' && m === 'POST') {
+    if (!body.clienteKey) return json(res, 400, { erro: 'Escolha um cliente.' })
+    const c = await pr.addConteudo(body)
+    if (!c) return json(res, 404, { erro: 'Cliente não encontrado.' })
+    return json(res, 200, { ok: true, conteudo: c, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/conteudos/') && p.endsWith('/agendar') && (m === 'PATCH' || m === 'PUT')) {
+    const num = p.split('/')[3]
+    const c = await pr.agendarConteudo(num, body.data, body.hora)
+    if (!c) return json(res, 404, { erro: 'Conteúdo não encontrado.' })
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/conteudos/') && (m === 'PATCH' || m === 'PUT')) {
+    const num = decodeURIComponent(p.slice('/producao/conteudos/'.length))
+    const c = await pr.updateConteudo(num, body)
+    if (!c) return json(res, 404, { erro: 'Conteúdo não encontrado.' })
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/conteudos/') && m === 'DELETE') {
+    await pr.deleteConteudo(decodeURIComponent(p.slice('/producao/conteudos/'.length)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- produção: tarefas ---
+  if (p === '/producao/tarefas' && m === 'POST') {
+    if (!body.clienteKey) return json(res, 400, { erro: 'Escolha um cliente.' })
+    const t = await pr.addTarefa(body)
+    if (!t) return json(res, 404, { erro: 'Cliente não encontrado.' })
+    return json(res, 200, { ok: true, tarefa: t, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/tarefas/') && (m === 'PATCH' || m === 'PUT')) {
+    const num = decodeURIComponent(p.slice('/producao/tarefas/'.length))
+    const t = await pr.updateTarefa(num, body)
+    if (!t) return json(res, 404, { erro: 'Tarefa não encontrada.' })
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/tarefas/') && m === 'DELETE') {
+    await pr.deleteTarefa(decodeURIComponent(p.slice('/producao/tarefas/'.length)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- produção: recorrências ---
+  if (p === '/producao/recorrencias' && m === 'POST') {
+    if (!body.clienteKey || body.diaSemana === undefined) return json(res, 400, { erro: 'Escolha cliente e dia da semana.' })
+    const r = await pr.addRecorrencia(body)
+    if (!r) return json(res, 404, { erro: 'Cliente não encontrado.' })
+    await pr.gerarConteudosRecorrentes()
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p.startsWith('/producao/recorrencias/') && m === 'DELETE') {
+    await pr.removerRecorrencia(decodeURIComponent(p.slice('/producao/recorrencias/'.length)))
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+
+  // --- produção: semana e configurações ---
+  if (p === '/producao/semana' && m === 'GET') {
+    return json(res, 200, pr.semana(url.searchParams.get('data') || undefined))
+  }
+  if (p === '/producao/fechar' && m === 'POST') {
+    await pr.fecharSemana(body.data)
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p === '/producao/lembretes' && m === 'POST') {
+    await pr.setLembretesConfig(body)
+    return json(res, 200, { ok: true, state: montarEstado() })
+  }
+  if (p === '/producao/cliente' && m === 'GET') {
+    const c = pr.getCliente(url.searchParams.get('key'))
+    if (!c) return json(res, 404, { erro: 'Cliente não encontrado.' })
+    return json(res, 200, {
+      cliente: c,
+      resumo: pr.resumoCliente(c.key),
+      conteudos: pr.listConteudos({ clienteKey: c.key }),
+      tarefas: pr.listTarefas({ clienteKey: c.key }),
+      recorrencias: pr.listRecorrencias(c.key),
+    })
   }
 
   // --- backup e fechamento ---

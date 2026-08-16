@@ -73,7 +73,7 @@ main {
   backdrop-filter: saturate(160%) blur(14px);
   border-top: 1px solid var(--line);
   padding: 6px 2px calc(var(--safe-b) + 6px);
-  display: grid; grid-template-columns: repeat(7, 1fr);
+  display: grid; grid-template-columns: repeat(8, 1fr);
 }
 .tabbar button {
   background: none; border: none; color: var(--txt-3); cursor: pointer;
@@ -367,6 +367,47 @@ svg text { fill: var(--txt-3); font-family: inherit; }
   background: rgba(255, 176, 32, .12); border: 1px solid rgba(255, 176, 32, .3);
   color: var(--warn); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 650;
 }
+
+/* ================= produção de conteúdo ================= */
+
+/* barrinha colorida de identificação do cliente */
+.prod-cor { width: 4px; flex: 0 0 auto; border-radius: 4px; align-self: stretch; min-height: 34px; }
+.prod-cliente-item { display: flex; align-items: center; gap: 11px; }
+
+.prod-thumb {
+  width: 40px; height: 40px; border-radius: 10px; flex: 0 0 auto;
+  background: var(--card-2); display: grid; place-items: center; font-size: 16px; overflow: hidden;
+}
+.prod-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+/* zona de upload — funciona por toque (abre o seletor) e por arrastar no desktop */
+.prod-drop {
+  border: 2px dashed var(--line); border-radius: 14px; padding: 26px 16px;
+  text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.prod-drop.ativo { border-color: var(--accent); background: rgba(124, 92, 255, .08); }
+.prod-drop input[type="file"] { display: none; }
+
+.prod-lista-arquivos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.prod-arquivo-pill {
+  display: flex; align-items: center; gap: 6px; background: var(--card-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 10px; font-size: 12.5px; max-width: 100%;
+}
+.prod-arquivo-pill .x { background: none; border: none; color: var(--txt-3); cursor: pointer; font-size: 14px; padding: 0 2px; }
+
+/* status/prioridade com cor própria, reaproveitando .tag */
+.tag.status-rascunho { color: var(--txt-3); }
+.tag.status-edicao { color: var(--accent-2); border-color: rgba(124,92,255,.35); background: rgba(124,92,255,.1); }
+.tag.status-pronto { color: var(--warn); border-color: rgba(255,176,32,.3); background: rgba(255,176,32,.1); }
+.tag.status-agendado { color: #4d9dff; border-color: rgba(77,157,255,.3); background: rgba(77,157,255,.1); }
+.tag.status-publicado { color: var(--ok); border-color: rgba(47,208,138,.3); background: rgba(47,208,138,.1); }
+.tag.status-cancelado { color: var(--danger); border-color: rgba(255,90,106,.3); background: rgba(255,90,106,.1); }
+.tag.prioridade-alta { color: var(--danger); }
+
+/* dia da semana no board — mesma estrutura de card usada na agenda */
+.prod-dia-cabeca { display: flex; align-items: center; gap: 8px; }
+.prod-dia-cabeca .qtd { font-size: 12px; color: var(--txt-3); font-weight: 600; }
+.prod-dia-hoje { border-color: rgba(124,92,255,.45) !important; }
 
 /* ================= bottom sheet ================= */
 

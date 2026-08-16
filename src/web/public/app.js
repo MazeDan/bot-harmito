@@ -26,6 +26,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const money = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const curto = (v) => { const n = Math.abs(Number(v) || 0); return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.', ',') + 'k' : String(Math.round(n)) }
 const dataBR = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+const dataISOBR = (iso) => { const [, m, d] = iso.split('-'); return `${d}/${m}` }
 const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 const vibrar = (ms = 8) => navigator.vibrate?.(ms)
 
@@ -237,6 +238,11 @@ const TITULOS = {
     if (d?.celebracao) return d.celebracao
     return S.liturgia.anotacaoHoje ? 'anotado hoje ✅' : 'leituras do dia'
   }],
+  producao: ['Produção', () => {
+    const d = S.producao.dashboard
+    const pend = d.atrasadas + d.naoPlanejados
+    return pend ? `${d.hoje.publicar + d.hoje.tarefas} hoje · ${pend} pendente(s)` : `${d.hoje.publicar + d.hoje.tarefas} hoje`
+  }],
   cartoes: ['Cartões', () => `${S.cards.length} cadastrado(s)`],
   pessoas: ['Pessoas', () => `${S.pessoas.filter((p) => !p.eu && p.saldo > 0.009).length} devendo`],
   historico: ['Histórico', () => {
@@ -262,11 +268,17 @@ function render({ manterScroll = false } = {}) {
   badge.hidden = !pend
   badge.textContent = pend > 9 ? '9+' : String(pend)
 
+  // bolinha da Produção: atrasadas + sem data
+  const badgeP = $('#badgeProducao')
+  const pendP = S.producao.dashboard.atrasadas + S.producao.dashboard.naoPlanejados
+  badgeP.hidden = !pendP
+  badgeP.textContent = pendP > 9 ? '9+' : String(pendP)
+
   // o botão flutuante muda de função conforme a aba
-  $('#fab').textContent = TAB === 'agenda' ? '📝' : TAB === 'liturgia' ? '✍️' : '+'
+  $('#fab').textContent = TAB === 'agenda' ? '📝' : TAB === 'liturgia' ? '✍️' : TAB === 'producao' ? '🎬' : '+'
   $('#fab').style.display = TAB === 'liturgia' && !LIT_CACHE.get(LIT_DATA ?? S.agenda.hoje) ? 'none' : ''
 
-  $('#main').innerHTML = ({ resumo, agenda, liturgia, cartoes, pessoas, historico, mais })[TAB]()
+  $('#main').innerHTML = ({ resumo, agenda, liturgia, producao, cartoes, pessoas, historico, mais })[TAB]()
   ligarEventos()
   ligarCopia()
   window.scrollTo(0, manterScroll ? y : 0)
@@ -500,6 +512,480 @@ function cardLiturgia() {
       <button class="btn ghost" data-acao="liturgia-grupos">Grupos</button>
     </div>
   </div>`
+}
+
+// ---------- produção de conteúdo ----------
+
+let PROD_SUBTAB = 'semana'
+let PROD_SEMANA_DATA = null // null = semana atual
+
+const NOME_TIPO_CONTEUDO = { post: 'Post', story: 'Story', reels: 'Reels', video: 'Vídeo', carrossel: 'Carrossel', arte: 'Arte', outro: 'Outro' }
+const ICONE_TIPO_CONTEUDO = { post: '📱', story: '⭕', reels: '🎬', video: '🎥', carrossel: '🖼️', arte: '🎨', outro: '📎' }
+const NOME_STATUS_CONTEUDO = { rascunho: 'Rascunho', edicao: 'Em edição', pronto: 'Pronto', agendado: 'Agendado', publicado: 'Publicado', cancelado: 'Cancelado' }
+const ICONE_STATUS_CONTEUDO = { rascunho: '📥', edicao: '🎨', pronto: '🟡', agendado: '📅', publicado: '🚀', cancelado: '❌' }
+const NOME_TIPO_TAREFA = {
+  editar_video: 'Editar vídeo', criar_arte: 'Criar arte', criar_legenda: 'Criar legenda', revisar: 'Revisar conteúdo',
+  enviar_cliente: 'Enviar para cliente', aguardar_aprovacao: 'Aguardar aprovação', publicar: 'Publicar',
+  criar_roteiro: 'Criar roteiro', gravar_video: 'Gravar vídeo', outro: 'Outro',
+}
+const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+
+const nomeCli = (k) => S.producao.clientes.find((c) => c.key === k)?.name ?? k
+const corCli = (k) => S.producao.clientes.find((c) => c.key === k)?.color ?? '#7c5cff'
+const arquivoURL = (num) => `/api/producao/arquivo/${num}?t=${encodeURIComponent(TOKEN)}`
+
+const hojeISOProd = () => S.agenda?.hoje ?? hojeISO()
+
+function rotuloDiaProd(dataISO) {
+  const hoje = hojeISOProd()
+  const amanha = (() => { const d = new Date(hoje + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) })()
+  if (dataISO === hoje) return 'Hoje'
+  if (dataISO === amanha) return 'Amanhã'
+  const d = new Date(dataISO + 'T12:00:00')
+  return `${DIAS_SEMANA[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${MESES[d.getMonth()]}`
+}
+
+function linhaConteudo(c) {
+  return `<button class="row-item" data-acao="prod-ver-conteudo" data-num="${c.num}">
+    <span class="prod-cor" style="background:${esc(corCli(c.clienteKey))}"></span>
+    <span class="grow">
+      <span class="t1">${c.hora ? `<b>${esc(c.hora)}</b> ` : ''}${ICONE_TIPO_CONTEUDO[c.tipo]} ${esc(c.titulo || NOME_TIPO_CONTEUDO[c.tipo])}</span>
+      <span class="t2">${esc(nomeCli(c.clienteKey))}${c.plataforma ? ' · ' + esc(c.plataforma) : ''}</span>
+    </span>
+    <span class="tag status-${c.status}">${ICONE_STATUS_CONTEUDO[c.status]} ${NOME_STATUS_CONTEUDO[c.status]}</span>
+  </button>`
+}
+
+function linhaTarefa(t, { atrasada = false } = {}) {
+  return `<button class="row-item" data-acao="prod-ver-tarefa" data-num="${t.num}">
+    <span class="prod-cor" style="background:${esc(corCli(t.clienteKey))}"></span>
+    <span class="grow">
+      <span class="t1">${esc(t.titulo || NOME_TIPO_TAREFA[t.tipo])}</span>
+      <span class="t2">${esc(nomeCli(t.clienteKey))}${t.prazo ? ' · prazo ' + dataISOBR(t.prazo) : ''}</span>
+    </span>
+    ${atrasada ? '<span class="tag danger">atrasada</span>' : `<span class="tag ${t.prioridade === 'alta' ? 'prioridade-alta' : ''}">${t.prioridade}</span>`}
+  </button>`
+}
+
+function producao() {
+  const chips = `<div class="filtros" style="position:static;margin:0 0 14px;padding:0">
+    <div class="chips">
+      <button class="chip ${PROD_SUBTAB === 'semana' ? 'on' : ''}" data-acao="prod-subtab" data-sub="semana">📅 Semana</button>
+      <button class="chip ${PROD_SUBTAB === 'clientes' ? 'on' : ''}" data-acao="prod-subtab" data-sub="clientes">👤 Clientes</button>
+      <button class="chip ${PROD_SUBTAB === 'pendencias' ? 'on' : ''}" data-acao="prod-subtab" data-sub="pendencias">📋 Pendências</button>
+    </div>
+  </div>`
+
+  const corpo = PROD_SUBTAB === 'clientes' ? prodClientes() : PROD_SUBTAB === 'pendencias' ? prodPendencias() : prodSemana()
+  return chips + corpo
+}
+
+function prodSemana() {
+  const usandoAtual = !PROD_SEMANA_DATA
+  const s = usandoAtual ? S.producao.semanaAtual : PROD_SEMANA_CACHE
+
+  if (!usandoAtual && !s) {
+    carregarSemanaProd(PROD_SEMANA_DATA)
+    return '<div class="card"><div class="empty"><span class="big">📅</span>Carregando semana…</div></div>'
+  }
+
+  const d = S.producao.dashboard
+  let t = `<div class="grid g2" style="margin-bottom:14px">
+    <div class="kpi"><div class="lbl">Hoje</div><div class="val">${d.hoje.publicar + d.hoje.tarefas}</div><div class="sub">${d.hoje.editar} vídeo(s) p/ editar</div></div>
+    <div class="kpi ${d.atrasadas ? 'danger' : 'ok'}"><div class="lbl">Atrasadas</div><div class="val">${d.atrasadas}</div><div class="sub">${d.naoPlanejados} sem data</div></div>
+  </div>`
+
+  t += `<div class="lit-dias">
+    <button class="btn ghost sm" data-acao="prod-semana-nav" data-passo="-7">‹</button>
+    <span class="atual">${esc(rotuloDiaProd(s.inicio))} a ${esc(rotuloDiaProd(s.fim))}</span>
+    <button class="btn ghost sm" data-acao="prod-semana-nav" data-passo="7">›</button>
+  </div>`
+  if (!usandoAtual) t += `<button class="btn ghost full" data-acao="prod-semana-hoje" style="margin-bottom:14px">Voltar pra semana atual</button>`
+
+  t += `<div class="card" style="margin-bottom:14px">
+    <div class="row-item" style="cursor:default">
+      <span class="grow t1" style="font-weight:600">Planejamento desta semana</span>
+      ${s.fechada ? '<span class="tag ok">✅ fechado</span>' : '<span class="tag warn">aberto</span>'}
+    </div>
+    ${!s.fechada ? '<button class="btn full" data-acao="prod-fechar-semana" style="margin-top:10px">Fechar planejamento</button>' : ''}
+  </div>`
+
+  for (const dia of s.dias) {
+    const conteudos = dia.itens.filter((i) => i._tipo === 'conteudo')
+    const tarefas = dia.itens.filter((i) => i._tipo === 'tarefa')
+    const ehHoje = dia.data === hojeISOProd()
+    t += `<div class="card ${ehHoje ? 'prod-dia-hoje' : ''}" style="margin-bottom:12px">
+      <h3 class="prod-dia-cabeca">${esc(rotuloDiaProd(dia.data))} <span class="qtd push">${dia.itens.length ? `${dia.itens.length} item(ns)` : ''}</span></h3>
+      ${dia.itens.length ? `<div class="rows">${conteudos.map(linhaConteudo).join('')}${tarefas.map((t2) => linhaTarefa(t2)).join('')}</div>` : '<div class="muted" style="font-size:13px;padding:4px 0">Sem publicação.</div>'}
+    </div>`
+  }
+  return t
+}
+
+function prodClientes() {
+  const lista = S.producao.clientes
+  if (!lista.length) {
+    return `<div class="card"><div class="empty"><span class="big">👤</span>Nenhum cliente ainda.</div>
+      <button class="btn full" data-acao="prod-novo-cliente">+ Novo cliente</button></div>`
+  }
+  const linhas = lista.map((c) => `<button class="row-item prod-cliente-item" data-acao="prod-ver-cliente" data-key="${esc(c.key)}">
+    <span class="prod-cor" style="background:${esc(c.color)}"></span>
+    <span class="avatar" style="background:${esc(c.color)}22;color:${esc(c.color)}">${esc(iniciais(c.name))}</span>
+    <span class="grow"><span class="t1">${esc(c.name)}${!c.active ? ' <span class="tag">inativo</span>' : ''}</span>
+    <span class="t2">${esc(c.company || c.phone || 'sem detalhes')}</span></span>
+    <span class="chev">›</span>
+  </button>`).join('')
+
+  return `<div class="card"><div class="rows">${linhas}</div></div>
+    <button class="btn ghost full" style="margin-top:14px" data-acao="prod-novo-cliente">+ Novo cliente</button>`
+}
+
+function prodPendencias() {
+  const atrasadas = S.producao.tarefasAtrasadas
+  const naoPlanejados = S.producao.naoPlanejados
+  const pendentes = S.producao.tarefasPendentes.filter((t) => !atrasadas.some((a) => a.num === t.num))
+
+  if (!atrasadas.length && !naoPlanejados.length && !pendentes.length) {
+    return '<div class="card"><div class="empty"><span class="big">🎉</span>Tudo em dia na produção!</div></div>'
+  }
+
+  let t = ''
+  if (atrasadas.length) t += `<div class="card" style="border-color:rgba(255,90,106,.4);margin-bottom:14px">
+    <h3>🔴 Atrasadas <span class="push muted">${atrasadas.length}</span></h3>
+    <div class="rows">${atrasadas.map((tk) => linhaTarefa(tk, { atrasada: true })).join('')}</div></div>`
+  if (naoPlanejados.length) t += `<div class="card" style="margin-bottom:14px">
+    <h3>🟡 Sem data <span class="push muted">${naoPlanejados.length}</span></h3>
+    <div class="rows">${naoPlanejados.map(linhaConteudo).join('')}</div></div>`
+  if (pendentes.length) t += `<div class="card">
+    <h3>⏳ Tarefas pendentes <span class="push muted">${pendentes.length}</span></h3>
+    <div class="rows">${pendentes.map((tk) => linhaTarefa(tk)).join('')}</div></div>`
+  return t
+}
+
+// ---- semana em outra data (cache leve, igual ao padrão da liturgia) ----
+let PROD_SEMANA_CACHE = null
+async function carregarSemanaProd(data) {
+  PROD_SEMANA_CACHE = await api(`/producao/semana?data=${encodeURIComponent(data)}`)
+  if (TAB === 'producao') render({ manterScroll: true })
+}
+
+// ---- formulários ----
+
+function grupoChipsProd(bg, sel, valorInicial, aoTrocar) {
+  const grupo = $(sel, bg)
+  if (!grupo) return () => valorInicial
+  $$('.chip', grupo).forEach((c) => {
+    c.onclick = () => {
+      vibrar()
+      $$('.chip', grupo).forEach((x) => x.classList.remove('on'))
+      c.classList.add('on')
+      aoTrocar?.(c.dataset.v)
+    }
+  })
+  return () => $('.chip.on', grupo)?.dataset.v ?? valorInicial
+}
+
+function formCliente(cliente = null) {
+  const corpo = `
+    <div class="field"><label>Nome</label><input id="pcNome" value="${esc(cliente?.name || '')}" placeholder="Sr. Altamir"></div>
+    <div class="field-row">
+      <div class="field"><label>Empresa</label><input id="pcEmpresa" value="${esc(cliente?.company || '')}" placeholder="Barbearia"></div>
+      <div class="field" style="flex:0 0 74px"><label>Cor</label><input id="pcCor" type="color" value="${esc(cliente?.color || '#7c5cff')}" style="padding:4px;min-height:48px"></div>
+    </div>
+    <div class="field"><label>Telefone / WhatsApp</label><input id="pcFone" value="${esc(cliente?.phone || '')}" placeholder="71999998888"></div>
+    <div class="field"><label>Instagram</label><input id="pcInsta" value="${esc(cliente?.instagram || '')}" placeholder="@barbearia"></div>
+    <div class="field"><label>Observações</label><textarea id="pcObs" rows="2">${esc(cliente?.notes || '')}</textarea></div>
+    ${cliente ? `<button class="btn danger full" data-f="excluir">Excluir cliente e todo o histórico</button>` : ''}`
+
+  const { bg, fechar } = sheet({
+    titulo: cliente ? cliente.name : 'Novo cliente',
+    corpo,
+    acoes: [{
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const name = $('#pcNome', bg).value.trim()
+        if (!name) return toast('Informe o nome.', 'err')
+        btn.disabled = true
+        try {
+          await api('/producao/clientes', {
+            body: {
+              name, company: $('#pcEmpresa', bg).value.trim(), color: $('#pcCor', bg).value,
+              phone: $('#pcFone', bg).value.trim(), instagram: $('#pcInsta', bg).value.trim(), notes: $('#pcObs', bg).value.trim(),
+            },
+          })
+          fechar(); toast('Cliente salvo.'); render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+
+  $('[data-f="excluir"]', bg)?.addEventListener('click', async () => {
+    if (!await confirmar(`Excluir "${cliente.name}" e todo o histórico de conteúdos e tarefas? Isso não tem volta.`, 'Excluir tudo')) return
+    await api(`/producao/clientes/${encodeURIComponent(cliente.key)}`, { method: 'DELETE' })
+    fechar(); toast('Cliente excluído.'); render({ manterScroll: true })
+  })
+}
+
+async function verCliente(key) {
+  const cliente = S.producao.clientes.find((c) => c.key === key)
+  if (!cliente) return
+  const { bg, fechar } = sheet({
+    titulo: cliente.name,
+    corpo: '<div class="empty">Carregando…</div>',
+    aoAbrir: async () => {
+      const dados = await api(`/producao/cliente?key=${encodeURIComponent(key)}`)
+      const r = dados.resumo
+      const naoPlanejados = dados.conteudos.filter((c) => !c.data)
+      const planejados = dados.conteudos.filter((c) => c.data).slice(0, 8)
+      const tarefasAbertas = dados.tarefas.filter((t) => t.status === 'pendente')
+
+      $('.body', bg).innerHTML = `
+        <div style="text-align:center;padding:4px 0 14px">
+          <span class="avatar" style="width:56px;height:56px;font-size:20px;background:${esc(cliente.color)}22;color:${esc(cliente.color)}">${esc(iniciais(cliente.name))}</span>
+          <div style="font-weight:650;font-size:16px;margin-top:8px">${esc(cliente.name)}</div>
+          ${cliente.company ? `<div class="muted" style="font-size:13px">${esc(cliente.company)}</div>` : ''}
+          <div class="muted" style="font-size:12.5px;margin-top:4px">${[cliente.phone, cliente.instagram].filter(Boolean).map(esc).join(' · ') || 'sem contato'}</div>
+        </div>
+
+        <div class="grid g2" style="margin-bottom:14px">
+          <div class="kpi ok"><div class="lbl">Publicados</div><div class="val" style="font-size:20px">${r.publicados}</div></div>
+          <div class="kpi"><div class="lbl">Agendados</div><div class="val" style="font-size:20px">${r.agendados}</div></div>
+        </div>
+
+        <div class="prod-drop" id="pcDrop">
+          <div style="font-size:26px">📤</div>
+          <div style="font-weight:600;margin-top:6px">Toque para enviar arte ou vídeo</div>
+          <div class="muted" style="font-size:12px;margin-top:3px">JPG, PNG, WEBP, MP4, MOV, PDF</div>
+          <input type="file" id="pcArquivos" multiple accept="${S.producao.extensoesAceitas?.join(',') ?? ''}">
+        </div>
+        <div class="prod-lista-arquivos" id="pcArquivosLista"></div>
+
+        <div class="btn-row" style="margin:14px 0">
+          <button class="btn ghost" data-f="nova-tarefa">+ Tarefa</button>
+          <button class="btn ghost" data-f="editar">✏️ Editar</button>
+        </div>
+
+        ${naoPlanejados.length ? `<h3 style="font-size:13px;margin-bottom:8px">Sem data (${naoPlanejados.length})</h3>
+          <div class="rows" style="margin-bottom:16px">${naoPlanejados.slice(0, 6).map(linhaConteudo).join('')}</div>` : ''}
+
+        ${tarefasAbertas.length ? `<h3 style="font-size:13px;margin-bottom:8px">Tarefas abertas (${tarefasAbertas.length})</h3>
+          <div class="rows" style="margin-bottom:16px">${tarefasAbertas.map((t) => linhaTarefa(t)).join('')}</div>` : ''}
+
+        ${planejados.length ? `<h3 style="font-size:13px;margin-bottom:8px">Conteúdos planejados</h3>
+          <div class="rows">${planejados.map(linhaConteudo).join('')}</div>` : ''}`
+
+      ligarEventos()
+
+      const drop = $('#pcDrop', bg)
+      const input = $('#pcArquivos', bg)
+      drop.onclick = () => input.click()
+      drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('ativo') }
+      drop.ondragleave = () => drop.classList.remove('ativo')
+      drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('ativo'); if (e.dataTransfer.files.length) enviarArquivos(key, e.dataTransfer.files, bg, fechar) }
+      input.onchange = () => { if (input.files.length) enviarArquivos(key, input.files, bg, fechar) }
+
+      $('[data-f="editar"]', bg).onclick = () => { fechar(); setTimeout(() => formCliente(cliente), 200) }
+      $('[data-f="nova-tarefa"]', bg).onclick = () => { fechar(); setTimeout(() => formTarefa(null, key), 200) }
+    },
+  })
+}
+
+async function enviarArquivos(clienteKey, fileList, bg, fecharSheet) {
+  const lista = $('#pcArquivosLista', bg)
+  const fd = new FormData()
+  fd.append('cliente', clienteKey)
+  const nomes = []
+  for (const f of fileList) { fd.append('arquivos', f); nomes.push(f.name) }
+  lista.innerHTML = nomes.map((n) => `<span class="prod-arquivo-pill">⏳ ${esc(n)}</span>`).join('')
+
+  try {
+    const res = await fetch('/api/producao/upload', { method: 'POST', headers: { 'x-token': TOKEN }, body: fd })
+    const data = await res.json()
+    if (data.state) S = data.state
+    if (!res.ok) throw new Error(data.erro || 'Falha no envio.')
+    toast(`📤 ${data.criados} arquivo(s) enviado(s)${data.erros?.length ? `, ${data.erros.length} recusado(s)` : ''}.`)
+    if (data.erros?.length) console.warn('Uploads recusados:', data.erros)
+    fecharSheet(); setTimeout(() => verCliente(clienteKey), 200)
+  } catch (e) {
+    toast(e.message, 'err')
+    lista.innerHTML = ''
+  }
+}
+
+function formTarefa(tarefa = null, clienteKeyPadrao = null) {
+  const clientes = S.producao.clientes
+  const corpo = `
+    ${!tarefa ? `<div class="field"><label>Cliente</label>
+      <div class="chips scroll" id="ftCliente">${clientes.map((c) => `<button class="chip ${c.key === clienteKeyPadrao ? 'on' : ''}" data-v="${esc(c.key)}">${esc(c.name)}</button>`).join('')}</div></div>` : ''}
+    <div class="field"><label>Tipo</label>
+      <div class="chips scroll" id="ftTipo">${Object.entries(NOME_TIPO_TAREFA).map(([v, n]) => `<button class="chip dim ${v === (tarefa?.tipo ?? 'editar_video') ? 'on' : ''}" data-v="${v}">${n}</button>`).join('')}</div></div>
+    <div class="field"><label>Título</label><input id="ftTitulo" value="${esc(tarefa?.titulo || '')}" placeholder="Editar vídeo promocional"></div>
+    <div class="field-row">
+      <div class="field"><label>Prazo</label><input id="ftPrazo" type="date" value="${esc(tarefa?.prazo || hojeISOProd())}"></div>
+      <div class="field"><label>Prioridade</label>
+        <div class="chips" id="ftPrioridade">
+          <button class="chip dim ${(tarefa?.prioridade ?? 'normal') === 'baixa' ? 'on' : ''}" data-v="baixa">🟢 baixa</button>
+          <button class="chip dim ${(tarefa?.prioridade ?? 'normal') === 'normal' ? 'on' : ''}" data-v="normal">🟡 normal</button>
+          <button class="chip dim ${tarefa?.prioridade === 'alta' ? 'on' : ''}" data-v="alta">🔴 alta</button>
+        </div>
+      </div>
+    </div>
+    ${tarefa ? `<div class="field"><label>Status</label>
+      <div class="chips" id="ftStatus">
+        <button class="chip dim ${tarefa.status === 'pendente' ? 'on' : ''}" data-v="pendente">⏳ pendente</button>
+        <button class="chip dim ${tarefa.status === 'andamento' ? 'on' : ''}" data-v="andamento">🔧 em andamento</button>
+        <button class="chip dim ${tarefa.status === 'concluido' ? 'on' : ''}" data-v="concluido">✅ concluído</button>
+      </div></div>` : ''}
+    <div class="field"><label>Observações</label><textarea id="ftObs" rows="2">${esc(tarefa?.obs || '')}</textarea></div>
+    ${tarefa ? '<button class="btn danger full" data-f="excluir">Excluir tarefa</button>' : ''}`
+
+  const { bg, fechar } = sheet({
+    titulo: tarefa ? `Tarefa #${tarefa.num}` : 'Nova tarefa',
+    corpo,
+    acoes: [{
+      label: 'Salvar', onClick: async ({ btn }) => {
+        const titulo = $('#ftTitulo', bg).value.trim()
+        btn.disabled = true
+        try {
+          const corpoReq = {
+            tipo: pegaTipo(), titulo, prazo: $('#ftPrazo', bg).value || null,
+            prioridade: pegaPrioridade(), obs: $('#ftObs', bg).value.trim(),
+          }
+          if (tarefa) {
+            corpoReq.status = pegaStatus()
+            await api(`/producao/tarefas/${tarefa.num}`, { method: 'PATCH', body: corpoReq })
+          } else {
+            const cli = pegaCliente()
+            if (!cli) { btn.disabled = false; return toast('Escolha o cliente.', 'err') }
+            corpoReq.clienteKey = cli
+            await api('/producao/tarefas', { body: corpoReq })
+          }
+          fechar(); toast('Tarefa salva.'); render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+
+  const pegaCliente = grupoChipsProd(bg, '#ftCliente', clienteKeyPadrao)
+  const pegaTipo = grupoChipsProd(bg, '#ftTipo', 'editar_video')
+  const pegaPrioridade = grupoChipsProd(bg, '#ftPrioridade', 'normal')
+  const pegaStatus = grupoChipsProd(bg, '#ftStatus', 'pendente')
+
+  $('[data-f="excluir"]', bg)?.addEventListener('click', async () => {
+    if (!await confirmar('Excluir essa tarefa?', 'Excluir')) return
+    await api(`/producao/tarefas/${tarefa.num}`, { method: 'DELETE' })
+    fechar(); toast('Excluída.'); render({ manterScroll: true })
+  })
+}
+
+function verTarefa(num) {
+  const t = [...S.producao.tarefasAtrasadas, ...S.producao.tarefasPendentes, ...S.producao.semanaAtual.dias.flatMap((d) => d.itens)]
+    .find((x) => x._tipo !== 'conteudo' && x.num === Number(num) && x.tipo)
+  if (t) return formTarefa(t)
+  // não achou no estado local (pode estar concluída/fora da semana) — busca no cliente
+  toast('Abra pela lista do cliente para ver tarefas concluídas.', 'err')
+}
+
+function formConteudo(conteudo) {
+  const corpo = `
+    <div class="field"><label>Tipo</label>
+      <div class="chips scroll" id="fcTipo">${Object.entries(NOME_TIPO_CONTEUDO).map(([v, n]) => `<button class="chip dim ${v === conteudo.tipo ? 'on' : ''}" data-v="${v}">${ICONE_TIPO_CONTEUDO[v]} ${n}</button>`).join('')}</div></div>
+    <div class="field"><label>Título</label><input id="fcTitulo" value="${esc(conteudo.titulo || '')}" placeholder="Promoção de corte"></div>
+    <div class="field"><label>Status</label>
+      <div class="chips scroll" id="fcStatus">${Object.entries(NOME_STATUS_CONTEUDO).map(([v, n]) => `<button class="chip dim ${v === conteudo.status ? 'on' : ''}" data-v="${v}">${ICONE_STATUS_CONTEUDO[v]} ${n}</button>`).join('')}</div></div>
+    <div class="field-row">
+      <div class="field"><label>Data</label><input id="fcData" type="date" value="${esc(conteudo.data || '')}"></div>
+      <div class="field"><label>Hora</label><input id="fcHora" type="time" value="${esc(conteudo.hora || '')}"></div>
+    </div>
+    <div class="field"><label>Plataforma</label><input id="fcPlataforma" value="${esc(conteudo.plataforma || '')}" placeholder="Instagram, TikTok…"></div>
+    <div class="field"><label>Legenda</label><textarea id="fcLegenda" rows="3">${esc(conteudo.legenda || '')}</textarea></div>
+    <div class="field"><label>Observações</label><textarea id="fcObs" rows="2">${esc(conteudo.obs || '')}</textarea></div>
+    <button class="btn danger full" data-f="excluir">Excluir conteúdo</button>`
+
+  const { bg, fechar } = sheet({
+    titulo: `#${conteudo.num} · ${nomeCli(conteudo.clienteKey)}`,
+    corpo,
+    aoAbrir: () => {
+      if (conteudo.arquivos?.length) {
+        const a = conteudo.arquivos[0]
+        const preview = /\.(jpe?g|png|webp|gif)$/i.test(a.nome)
+          ? `<img src="${arquivoURL(conteudo.num)}" style="width:100%;border-radius:12px;margin-bottom:14px;max-height:260px;object-fit:cover">`
+          : /\.(mp4|mov)$/i.test(a.nome)
+            ? `<video src="${arquivoURL(conteudo.num)}" controls style="width:100%;border-radius:12px;margin-bottom:14px;max-height:260px"></video>`
+            : `<a href="${arquivoURL(conteudo.num)}" target="_blank" class="msg-preview" style="display:block;text-decoration:none;margin-bottom:14px">📎 ${esc(a.nome)}</a>`
+        $('.body', bg).insertAdjacentHTML('afterbegin', preview)
+      }
+    },
+    acoes: [{
+      label: 'Salvar', onClick: async ({ btn }) => {
+        btn.disabled = true
+        try {
+          const data = $('#fcData', bg).value || null
+          const hora = $('#fcHora', bg).value || null
+          await api(`/producao/conteudos/${conteudo.num}`, {
+            method: 'PATCH',
+            body: {
+              tipo: pegaTipo(), titulo: $('#fcTitulo', bg).value.trim(), status: pegaStatus(),
+              plataforma: $('#fcPlataforma', bg).value.trim(), legenda: $('#fcLegenda', bg).value.trim(), obs: $('#fcObs', bg).value.trim(),
+            },
+          })
+          if (data !== conteudo.data || hora !== conteudo.hora) {
+            await api(`/producao/conteudos/${conteudo.num}/agendar`, { method: 'PATCH', body: { data, hora } })
+          }
+          fechar(); toast('Conteúdo salvo.'); render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+
+  const pegaTipo = grupoChipsProd(bg, '#fcTipo', conteudo.tipo)
+  const pegaStatus = grupoChipsProd(bg, '#fcStatus', conteudo.status)
+
+  $('[data-f="excluir"]', bg).onclick = async () => {
+    if (!await confirmar('Excluir este conteúdo e o arquivo anexado?', 'Excluir')) return
+    await api(`/producao/conteudos/${conteudo.num}`, { method: 'DELETE' })
+    fechar(); toast('Excluído.'); render({ manterScroll: true })
+  }
+}
+
+function verConteudo(num) {
+  const todos = [
+    ...S.producao.semanaAtual.dias.flatMap((d) => d.itens.filter((i) => i._tipo === 'conteudo')),
+    ...S.producao.naoPlanejados,
+  ]
+  const c = todos.find((x) => x.num === Number(num))
+  if (!c) return toast('Abra pela lista do cliente pra ver esse conteúdo.', 'err')
+  formConteudo(c)
+}
+
+function formRecorrencia(clienteKey) {
+  const corpo = `
+    <div class="field"><label>Tipo de conteúdo</label>
+      <div class="chips scroll" id="frTipo">${Object.entries(NOME_TIPO_CONTEUDO).map(([v, n]) => `<button class="chip dim ${v === 'post' ? 'on' : ''}" data-v="${v}">${ICONE_TIPO_CONTEUDO[v]} ${n}</button>`).join('')}</div></div>
+    <div class="field"><label>Dia da semana</label>
+      <div class="chips scroll" id="frDia">${DIAS_SEMANA.map((n, i) => `<button class="chip dim ${i === 1 ? 'on' : ''}" data-v="${i}">${n}</button>`).join('')}</div></div>
+    <div class="field-row">
+      <div class="field"><label>Horário</label><input id="frHora" type="time" value="10:00"></div>
+    </div>
+    <div class="field"><label>Título padrão</label><input id="frTitulo" placeholder="Post semanal"></div>
+    <div class="muted" style="font-size:12.5px">Gero automaticamente o conteúdo dessa recorrência com 2 semanas de antecedência.</div>`
+
+  const { bg, fechar } = sheet({
+    titulo: 'Nova recorrência',
+    corpo,
+    acoes: [{
+      label: 'Criar', onClick: async ({ btn }) => {
+        btn.disabled = true
+        try {
+          await api('/producao/recorrencias', {
+            body: { clienteKey, tipo: pegaTipo(), diaSemana: Number(pegaDia()), hora: $('#frHora', bg).value, titulo: $('#frTitulo', bg).value.trim() },
+          })
+          fechar(); toast('Recorrência criada.'); render({ manterScroll: true })
+        } catch (e) { btn.disabled = false; toast(e.message, 'err') }
+      },
+    }],
+  })
+  const pegaTipo = grupoChipsProd(bg, '#frTipo', 'post')
+  const pegaDia = grupoChipsProd(bg, '#frDia', '1')
 }
 
 // ---------- grupos ----------
@@ -1151,6 +1637,27 @@ function ligarEventos() {
 }
 
 const acoes = {
+  // --- produção de conteúdo ---
+  'prod-subtab': ({ sub }) => { PROD_SUBTAB = sub; render() },
+  'prod-novo-cliente': () => formCliente(null),
+  'prod-ver-cliente': ({ key }) => verCliente(key),
+  'prod-ver-conteudo': ({ num }) => verConteudo(num),
+  'prod-ver-tarefa': ({ num }) => verTarefa(num),
+  'prod-fechar-semana': async () => {
+    if (!await confirmar('Marcar o planejamento desta semana como fechado?', 'Fechar')) return
+    await api('/producao/fechar', { body: {} })
+    toast('✅ Planejamento fechado.'); render({ manterScroll: true })
+  },
+  'prod-semana-nav': ({ passo }) => {
+    const base = PROD_SEMANA_DATA || S.producao.semanaAtual.inicio
+    const d = new Date(base + 'T12:00:00')
+    d.setDate(d.getDate() + Number(passo))
+    PROD_SEMANA_DATA = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    PROD_SEMANA_CACHE = null
+    render()
+  },
+  'prod-semana-hoje': () => { PROD_SEMANA_DATA = null; PROD_SEMANA_CACHE = null; render() },
+
   'novo-cartao': () => formCartao(null),
   'editar-cartao': ({ card }) => formCartao(S.cards.find((c) => c.key === card)),
   'nova-pessoa': () => formPessoa(null),
@@ -2178,6 +2685,11 @@ $('#fab').onclick = () => {
     campo?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setTimeout(() => campo?.focus(), 350)
     return
+  }
+  if (TAB === 'producao') {
+    if (PROD_SUBTAB === 'clientes') return formCliente(null)
+    if (!S.producao.clientes.length) { toast('Cadastre um cliente primeiro.', 'err'); return formCliente(null) }
+    return formTarefa(null, S.producao.clientes[0].key)
   }
   formGasto()
 }

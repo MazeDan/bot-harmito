@@ -257,6 +257,55 @@ Tem aba própria no painel, montada como uma **linha do tempo** das leituras:
 
 As leituras são buscadas só quando você abre a aba, e ficam em cache — trocar de dia e voltar não consulta de novo.
 
+## Produção: clientes, conteúdos e planejamento semanal
+
+Pensado pra quem cuida das redes sociais de vários clientes: organiza o que precisa ser criado, editado e postado — e cobra pelo WhatsApp na hora certa.
+
+### Clientes
+
+| Comando | O que faz |
+|---|---|
+| `/producao cliente Sr. Altamir` (ou `/prod Altamir`) | Cadastra um cliente novo, ou abre o que já existe (nome curto encontra o nome completo) |
+| `/producao clientes` | Lista os clientes |
+
+Cada cliente tem cor própria (usada nas etiquetas do painel), empresa, telefone, Instagram e observações — tudo editável só pelo painel.
+
+### Conteúdos e tarefas
+
+| Comando | O que faz |
+|---|---|
+| `/producao hoje` | O que precisa publicar e editar hoje |
+| `/producao semana` | O planejamento dos próximos 7 dias, por dia |
+| `/producao pendencias` | Atrasados + conteúdos sem data marcada |
+
+Um conteúdo nasce como **rascunho**, sem data. Ao ganhar data e hora vira **agendado**; passa por **em edição** e **pronto** conforme o trabalho anda, e fecha como **publicado** (ou **cancelado**). Tarefas (editar vídeo, criar arte, criar legenda, revisar) têm prazo e prioridade, e ficam **pendentes** → **em andamento** → **concluídas**.
+
+Upload de arte/vídeo é só pelo painel — arraste ou toque no cliente para anexar (jpg, png, webp, gif, mp4, mov, pdf).
+
+### Fala natural pelo WhatsApp
+
+No privado, sem precisar de `/producao`, o bot entende:
+
+- **"concluí"**, **"publicado"**, **"marcar como concluído"** (respondendo ao lembrete) — fecha o item
+- **"adiar"**, **"adiar para amanhã"** — empurra a data
+- **"o que tenho hoje?"**, **"minhas pendências"**, **"o que preciso postar?"** — mesmas respostas de `/producao hoje` / `pendencias`
+- **"planejamento da semana"**, **"o que está atrasado?"** — mesmas de `/producao semana` / `pendencias`
+- **"mostrar Altamir"** — resumo daquele cliente
+
+### O que chega sozinho
+
+- **Sábado e domingo às 18:00** — cobra o planejamento da semana seguinte, se ainda não foi fechado
+- **Segunda às 08:00** — avisa o que ficou sem data marcada
+- **Bom dia às 08:00** — resumo do dia: o que publicar, prazos de edição, atrasados
+- **30 min antes de cada horário de publicação** — "hora de postar", com o conteúdo em anexo
+- **Tarefas** — aviso de manhã com as do dia, e de novo faltando o tempo configurado pro prazo (padrão 2h antes)
+
+Cada horário é configurável (aba **Mais** → **Produção**, ou `src/config.js` → `producao.padroes`); qualquer lembrete pode ser desligado individualmente.
+
+No painel, a aba **Produção** tem três visões: **Semana** (calendário com os dias e o que cai em cada um, com "fechar planejamento"), **Clientes** (lista, detalhe com upload e o que está pendente daquele cliente) e **Pendências** (sem data + tarefas em aberto, juntos).
+
+Ajuste com `PRODUCAO_ATIVA=0` para desligar o módulo inteiro.
+
 ## Deploy na Square Cloud
 
 O [squarecloud.app](squarecloud.app) já está configurado (`SUBDOMAIN=harmito`, `MAIN=src/index.js`). A Square Cloud só alcança o processo em **`0.0.0.0:80`** — por isso o `.env` precisa ir junto no zip:
@@ -327,6 +376,8 @@ src/
     cobranca.js         → montagem das mensagens, envio e agendador diário
     pdfExtrato.js       → leitura do PDF de extrato bancário
     wa.js               → conexão do WhatsApp compartilhada com o painel
+    producao.js         → clientes, conteúdos e tarefas (produção de conteúdo)
+    producaoLembretes.js → mensagens e agendador dos lembretes de produção
   web/
     server.js           → API + servidor do painel (node:http, sem deps)
     public/             → painel (HTML/CSS/JS puro, gráficos em SVG)

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { config } from '../config.js'
 import { AGENDA_FILE } from './agenda.js'
 import { LITURGIA_FILE } from './liturgia.js'
+import { PRODUCAO_FILE } from './producao.js'
 import { getCard, getPerson, getSettings, raw, setSettings } from './finance.js'
 import { getSock, isOnline, sendText } from './wa.js'
 
@@ -23,7 +24,10 @@ export async function snapshotDiario() {
   mkdirSync(BACKUP_DIR, { recursive: true })
   const feitos = []
 
-  for (const [prefixo, origem] of [['finance', FILE], ['agenda', AGENDA_FILE], ['liturgia', LITURGIA_FILE]]) {
+  // OBS: só os metadados (producao.json) — os arquivos enviados (fotos/vídeos
+  // dos clientes) ficam em data/uploads/ e não entram no backup por WhatsApp;
+  // são grandes demais. Faça backup deles junto com o disco do servidor.
+  for (const [prefixo, origem] of [['finance', FILE], ['agenda', AGENDA_FILE], ['liturgia', LITURGIA_FILE], ['producao', PRODUCAO_FILE]]) {
     if (!existsSync(origem)) continue
     const destino = path.join(BACKUP_DIR, `${prefixo}-${hojeISO()}.json`)
     if (!existsSync(destino)) {
@@ -108,6 +112,11 @@ export async function enviarBackup({ forcado = false } = {}) {
   if (existsSync(AGENDA_FILE)) {
     await sock.sendMessage(s.donoJid, {
       document: readFileSync(AGENDA_FILE), mimetype: 'application/json', fileName: `agenda-${data}.json`,
+    })
+  }
+  if (existsSync(PRODUCAO_FILE)) {
+    await sock.sendMessage(s.donoJid, {
+      document: readFileSync(PRODUCAO_FILE), mimetype: 'application/json', fileName: `producao-${data}.json`,
     })
   }
 

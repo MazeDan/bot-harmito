@@ -9,6 +9,8 @@ import { ehGrupo, permitido, registrarGrupo } from './lib/grupos.js'
 import { metadados } from './lib/grupo.js'
 import { parseExtrato } from './lib/pdfExtrato.js'
 import { allow } from './lib/rateLimit.js'
+import * as pr from './lib/producao.js'
+import { montarCliente, montarHoje, montarPendencias, montarSemana } from './commands/producao.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -105,6 +107,78 @@ async function handlePdf(sock, msg, pdf) {
   )
 }
 
+const semAcento = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+/**
+ * Comandos de produção sem prefixo — "publicado 7", "concluí 12", frases como
+ * "o que tenho hoje". Só roda no privado do dono, pra não confundir conversa
+ * normal com comando. Devolve true se tratou a mensagem.
+ */
+async function tentarComandoLivreProducao(sock, msg, chatId, textoOriginal) {
+  const t = semAcento(textoOriginal).replace(/[?!.]+$/, '')
+
+  let m = t.match(/^(publicado|publiquei)\s*#?(\d+)$/)
+  if (m) {
+    const c = pr.getConteudo(m[2])
+    if (!c) throw new Error(`Não achei o conteúdo #${m[2]}.`)
+    await pr.updateConteudo(c.num, { status: 'publicado' })
+    await sock.sendMessage(chatId, { text: `🚀 *${c.titulo || c.tipo}* marcado como publicado.` }, { quoted: msg })
+    return true
+  }
+
+  m = t.match(/^(conclui|concluido|concluída|concluida|feito)\s*#?(\d+)$/)
+  if (m) {
+    const tarefa = pr.getTarefa(m[2])
+    if (!tarefa) throw new Error(`Não achei a tarefa #${m[2]}.`)
+    await pr.updateTarefa(tarefa.num, { status: 'concluido' })
+    await sock.sendMessage(chatId, { text: `✅ *${tarefa.titulo}* concluída.` }, { quoted: msg })
+    return true
+  }
+
+  m = t.match(/^adiar\s*#?(\d+)(?:\s+(?:para\s+)?(amanha|\d{1,2}\/\d{1,2}))?$/)
+  if (m) {
+    const num = m[1]
+    const alvo = m[2]
+    const conteudo = pr.getConteudo(num)
+    const tarefa = conteudo ? null : pr.getTarefa(num)
+    if (!conteudo && !tarefa) throw new Error(`Não achei #${num} (nem conteúdo, nem tarefa).`)
+
+    const base = conteudo ? (conteudo.data || pr.hojeISO()) : (tarefa.prazo || pr.hojeISO())
+    let novaData
+    if (!alvo || alvo === 'amanha') novaData = pr.somarDias(base, 1)
+    else {
+      const [d, mo] = alvo.split('/').map(Number)
+      novaData = `${new Date().getFullYear()}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+
+    if (conteudo) await pr.agendarConteudo(conteudo.num, novaData, conteudo.hora)
+    else await pr.updateTarefa(tarefa.num, { prazo: novaData })
+    await sock.sendMessage(chatId, { text: `📅 Adiado para *${pr.rotuloData(novaData)}*.` }, { quoted: msg })
+    return true
+  }
+
+  const FRASES = [
+    [/^o que tenho hoje$/, () => montarHoje()],
+    [/^(minhas pendencias|pendencias)$/, () => montarPendencias()],
+    [/^o que preciso postar$/, () => montarHoje()],
+    [/^planejamento da semana$/, () => montarSemana()],
+    [/^o que esta atrasado$/, () => montarPendencias()],
+    [/^hoje$/, () => montarHoje()],
+    [/^semana$/, () => montarSemana()],
+  ]
+  for (const [re, gerar] of FRASES) {
+    if (re.test(t)) { await sock.sendMessage(chatId, { text: gerar() }, { quoted: msg }); return true }
+  }
+
+  m = t.match(/^mostrar\s+(.+)$/)
+  if (m && pr.getCliente(m[1])) {
+    await sock.sendMessage(chatId, { text: montarCliente(m[1]) }, { quoted: msg })
+    return true
+  }
+
+  return false
+}
+
 export async function handleMessage(sock, msg) {
   if (!msg.message || msg.key.fromMe) return
 
@@ -126,7 +200,19 @@ export async function handleMessage(sock, msg) {
   if (!text) return
 
   const prefix = config.prefixes.find((p) => text.startsWith(p))
-  if (!prefix) return
+  if (!prefix) {
+    // Sem barra: só tenta interpretar como comando de produção no privado do dono
+    const chatIdLivre = msg.key.remoteJid
+    const userIdLivre = msg.key.participant ?? msg.key.remoteJid
+    if (!ehGrupo(chatIdLivre) && getSettings().donoUser && userIdLivre === getSettings().donoUser) {
+      try {
+        await tentarComandoLivreProducao(sock, msg, chatIdLivre, text)
+      } catch (err) {
+        await sock.sendMessage(chatIdLivre, { text: `❌ ${err.message}` }, { quoted: msg }).catch(() => {})
+      }
+    }
+    return
+  }
 
   const [rawName, ...args] = text.slice(prefix.length).trim().split(/\s+/)
   const cmd = commands.get(rawName.toLowerCase())

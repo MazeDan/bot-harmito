@@ -78,6 +78,27 @@ export const config = {
     horarioResumo: process.env.AGENDA_HORARIO || '07:00',
   },
 
+  // Produção de conteúdo: clientes, artes/vídeos e planejamento semanal
+  producao: {
+    ativo: process.env.PRODUCAO_ATIVA !== '0',
+    // Extensões aceitas no upload pelo painel
+    extensoes: ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.pdf'],
+    // Tamanho máximo por arquivo e por lote de upload
+    maxArquivoBytes: 200 * 1024 * 1024,
+    maxLoteBytes: 400 * 1024 * 1024,
+    // Horários padrão dos lembretes (o dono ajusta pelo painel depois)
+    padroes: {
+      planejamentoSabado: true, planejamentoSabadoHora: '18:00',
+      planejamentoDomingo: true, planejamentoDomingoHora: '18:00',
+      segundaNaoPlanejado: true, segundaNaoPlanejadoHora: '08:00',
+      publicacaoAntecedenciaMin: 30,
+      tarefaManha: true, tarefaManhaHora: '08:00',
+      tarefaAntesPrazoHoras: 2,
+      resumoDiario: true, resumoDiarioHora: '08:00',
+      resumoNoturno: false, resumoNoturnoHora: '20:00',
+    },
+  },
+
   // Backup dos dados financeiros
   backup: {
     ativo: process.env.BACKUP_ATIVO !== '0',
