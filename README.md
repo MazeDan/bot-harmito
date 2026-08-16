@@ -116,6 +116,8 @@ TZ=America/Bahia
 
 Os comandos de **financeiro** e **agenda** são só do dono, e **nunca funcionam em grupo**. O primeiro que usar um deles vira o dono — depois disso o bot ignora qualquer outra pessoa que tente.
 
+Pra transferir pra outro número (ex.: você trocou de celular): mande `/dono trocar SEU_TOKEN` no privado, a partir do número novo. O token evita que qualquer um que descubra o número do bot vire dono — ele é gerado a cada reinício e aparece no log do servidor e no painel (*Mais* → **Dono do bot**), ou fixe um com `DONO_TOKEN` no `.env`.
+
 O resto é configurado **por grupo**, no painel (aba *Mais* → **Grupos**). Os grupos aparecem sozinhos assim que alguém usa um comando neles. Para cada um dá para:
 
 - ligar/desligar **categorias inteiras** (diversão, grupo, mídia, utilidades);

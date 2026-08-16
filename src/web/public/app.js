@@ -1023,7 +1023,21 @@ function historico() {
 // --- Mais ---
 function mais() {
   const s = S.settings
+  const d = S.dono
   return `
+    <div class="card"><h3>Dono do bot <small>quem usa financeiro e agenda</small></h3>
+      <div class="rows">
+        <div class="row-item" style="cursor:default"><span class="grow t1" style="font-weight:500">Número atual</span>
+          ${d.atual ? `<b class="mono">${esc(d.atual.split('@')[0])}</b>` : '<span class="tag warn">nenhum ainda</span>'}</div>
+      </div>
+      ${d.token ? `
+        <div class="banner warn" style="margin-top:12px">
+          🔑 Token para trocar o dono: <code style="user-select:all">${esc(d.token)}</code><br>
+          <span style="font-size:12px">Use no WhatsApp: <code>/dono trocar ${esc(d.token)}</code> — a partir do número novo, no privado. Gerado a cada reinício; defina <code>DONO_TOKEN</code> no servidor para fixar.</span>
+        </div>` : `
+        <div class="muted" style="font-size:12px;margin-top:10px">Token fixo definido em <code>DONO_TOKEN</code> — veja no servidor.</div>`}
+    </div>
+
     <div class="card"><h3>Atalhos</h3><div class="rows">
       ${linha({ av: '📋', t1: 'Lançar em lote', t2: 'várias linhas de uma vez', acao: 'abrir-lote' })}
       ${linha({ av: '💳', t1: 'Novo cartão', t2: 'fechamento, vencimento, limite', acao: 'novo-cartao' })}

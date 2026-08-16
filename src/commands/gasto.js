@@ -34,7 +34,8 @@ export default {
       )
     }
 
-    const created = await addExpense(r)
+    // parseLinha devolve `pessoa`, addExpense espera `person` — mesmo ajuste do /lote
+    const created = await addExpense({ ...r, person: r.pessoa })
     const b = balanceOf(r.pessoa)
     const e = created[0]
 

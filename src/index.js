@@ -10,6 +10,7 @@ import qrcode from 'qrcode-terminal'
 import { handleMessage, loadCommands } from './handler.js'
 import { initAgenda } from './lib/agenda.js'
 import { iniciarAgendador } from './lib/cobranca.js'
+import { iniciarDonoAuth } from './lib/donoAuth.js'
 import { initFinance } from './lib/finance.js'
 import { arroba, limparCache, metadados } from './lib/grupo.js'
 import { getGrupo, initGrupos, registrarGrupo } from './lib/grupos.js'
@@ -86,6 +87,7 @@ async function start() {
 initFinance()
 initAgenda()
 initGrupos()
+iniciarDonoAuth()
 initLiturgia()
 await loadCommands()
 iniciarPainel()

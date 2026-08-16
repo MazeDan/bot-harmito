@@ -15,6 +15,7 @@ import { commands } from '../handler.js'
 import { isOnline } from '../lib/wa.js'
 import { parseLote } from '../lib/parseLancamento.js'
 import * as fin from '../lib/finance.js'
+import { donoTokenAutomatico } from '../lib/donoAuth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC = path.join(__dirname, 'public')
@@ -109,6 +110,12 @@ function montarEstado() {
   return {
     eu,
     minhaParte: fin.minhaParte(),
+    dono: {
+      atual: fin.getSettings().donoUser || null,
+      // só mostra o token quando ele é gerado automaticamente — se veio de
+      // DONO_TOKEN fixo, quem entrou no painel já tem acesso ao servidor
+      token: donoTokenAutomatico(),
+    },
     grupos: {
       lista: grp.listarGrupos(),
       padrao: grp.raw().padrao,

@@ -150,7 +150,7 @@ export async function handleMessage(sock, msg) {
       await setSettings({ donoUser: userId })
       console.log(`👑 Dono definido: ${userId}`)
       await sock.sendMessage(chatId, {
-        text: `👑 Você agora é o dono do bot.\n\n_Só você usa os comandos de financeiro e agenda. Troque com_ */dono trocar* _se precisar._`,
+        text: '👑 Você agora é o dono do bot.\n\n_Só você usa os comandos de financeiro e agenda. Veja como transferir com_ */dono*_._',
       }, { quoted: msg })
     } else if (userId !== dono) {
       return // silencioso de propósito: ninguém precisa saber que o comando existe

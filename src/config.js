@@ -24,6 +24,13 @@ export const config = {
   // Quantas conversões de mídia rodam ao mesmo tempo
   concurrency: 2,
 
+  // Quem pode usar os comandos de financeiro e agenda
+  dono: {
+    // Token exigido em "/dono trocar" — sem ele, qualquer um que mandasse
+    // mensagem privada pro bot poderia assumir e ver seus dados.
+    token: process.env.DONO_TOKEN || '',
+  },
+
   // Painel web de controle financeiro
   web: {
     ativo: process.env.PAINEL_ATIVO !== '0',
