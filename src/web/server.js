@@ -498,6 +498,11 @@ async function api(req, res, url) {
   }
 
   // --- produção: conteúdos ---
+  if (p.startsWith('/producao/conteudos/') && m === 'GET') {
+    const c = pr.getConteudo(decodeURIComponent(p.slice('/producao/conteudos/'.length)))
+    if (!c) return json(res, 404, { erro: 'Conteúdo não encontrado.' })
+    return json(res, 200, c)
+  }
   if (p === '/producao/conteudos' && m === 'POST') {
     if (!body.clienteKey) return json(res, 400, { erro: 'Escolha um cliente.' })
     const c = await pr.addConteudo(body)
@@ -522,6 +527,11 @@ async function api(req, res, url) {
   }
 
   // --- produção: tarefas ---
+  if (p.startsWith('/producao/tarefas/') && m === 'GET') {
+    const t = pr.getTarefa(decodeURIComponent(p.slice('/producao/tarefas/'.length)))
+    if (!t) return json(res, 404, { erro: 'Tarefa não encontrada.' })
+    return json(res, 200, t)
+  }
   if (p === '/producao/tarefas' && m === 'POST') {
     if (!body.clienteKey) return json(res, 400, { erro: 'Escolha um cliente.' })
     const t = await pr.addTarefa(body)

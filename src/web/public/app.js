@@ -954,12 +954,13 @@ function formTarefa(tarefa = null, clienteKeyPadrao = null) {
   })
 }
 
-function verTarefa(num) {
+async function verTarefa(num) {
   const t = [...S.producao.tarefasAtrasadas, ...S.producao.tarefasPendentes, ...S.producao.semanaAtual.dias.flatMap((d) => d.itens)]
     .find((x) => x._tipo !== 'conteudo' && x.num === Number(num) && x.tipo)
   if (t) return formTarefa(t)
-  // não achou no estado local (pode estar concluída/fora da semana) — busca no cliente
-  toast('Abra pela lista do cliente para ver tarefas concluídas.', 'err')
+  // não achou no estado local (fora da semana atual, ou concluída) — busca direto no servidor
+  try { return formTarefa(await api(`/producao/tarefas/${num}`)) }
+  catch { toast('Tarefa não encontrada.', 'err') }
 }
 
 function formConteudo(conteudo) {
@@ -1024,14 +1025,16 @@ function formConteudo(conteudo) {
   }
 }
 
-function verConteudo(num) {
+async function verConteudo(num) {
   const todos = [
     ...S.producao.semanaAtual.dias.flatMap((d) => d.itens.filter((i) => i._tipo === 'conteudo')),
     ...S.producao.naoPlanejados,
   ]
   const c = todos.find((x) => x.num === Number(num))
-  if (!c) return toast('Abra pela lista do cliente pra ver esse conteúdo.', 'err')
-  formConteudo(c)
+  if (c) return formConteudo(c)
+  // não achou no estado local (data fora da semana atual) — busca direto no servidor
+  try { return formConteudo(await api(`/producao/conteudos/${num}`)) }
+  catch { toast('Conteúdo não encontrado.', 'err') }
 }
 
 function formRecorrencia(clienteKey) {
